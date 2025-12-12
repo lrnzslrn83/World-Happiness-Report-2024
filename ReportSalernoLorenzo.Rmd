@@ -1,0 +1,1823 @@
+---
+title: "Analisi del dataset World Happiness Report 2024"
+author: "Lorenzo Salerno"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+header-includes:
+  - \pagenumbering{arabic}
+  - \setcounter{page}{0}
+fontsize: 11pt
+geometry: margin=2cm
+---
+
+\newpage
+
+# Introduzione
+## Contesto del dataset World Happiness Report - 2024
+
+Il *World Happiness Report 2024* rappresenta una delle indagini internazionali più importanti dedicate allo studio della felicità e del benessere soggettivo.
+Il rapporto viene pubblicato annualmente e analizza la qualità della vita nei diversi paesi del mondo mediante indicatori qualitativi e quantitativi fornendo quindi una panoramica comparativa dello stato globale della felicità.
+
+Il World Happiness Report negli ultimi anni ha acquisito crescente rilevanza non solo nell'ambito accademico ma anche tra governi, organizzazioni e società che utilizzano tali informazioni per prendere decisioni basate sul benessere dei cittadini.
+
+La forza del dataset sta nel combinare contributi interdisciplinari  provenienti da economia, psicologia, statistica ufficiale, sanità pubblica e scienze sociali, mostrando quindi un quadro completo dei fattori che influenzano la felicità.
+
+## Fonte dei dati
+I dati sono presi da World Happiness Report - Data Sharing Portal, di seguito il link:
+
+
+https://www.worldhappiness.report/data-sharing/
+
+## Obiettivi
+Struttureremo il report in quattro fasi, ciascuna di esse finalizzata ad esplorare, comprendere e modellare al meglio la struttura dei dati disponibili.
+Nello specifico le fasi saranno le seguenti:
+
+1) Analisi Esplorativa dei Dati (EDA) -> Fase fondamentale per capire le caratteristiche  del dataset, mediante l'utilizzo di statistiche descrittive, distribuzioni, visualizzazioni grafiche e analisi delle correlazioni, inizia l'identificazione di pattern, anomalie, outlier e relazioni preliminari tra le variabili così ponendo le basi per le fasi successive.
+
+2) Analisi di Cluster (Cluster Analysis) -> In questa fase si procede all’individuazione di possibili gruppi omogenei all’interno del campione, mediante tecniche di clustering. Tale approccio consente di classificare gli individui in sottogruppi coerenti sulla base di caratteristiche comuni, offrendo una rappresentazione più strutturata e segmentata della popolazione oggetto di studio.
+
+3) Analisi delle Componenti Principali (PCA) -> la terza fase riguarda la riduzione della dimensionalità del dataset attraverso l’applicazione della PCA (Principal Component Analysis). Questa tecnica consente di sintetizzare l’informazione contenuta in un elevato numero di variabili in un insieme più ristretto di componenti principali facilitandone la visualizzazione e migliorando l’efficienza delle successive analisi o dei modelli predittivi.
+
+4) Modello di Regressione Lineare -> L'ultima fase riguarda la stima di un modello di regressione lineare con l’obiettivo di quantificare e prevedere la relazione tra una variabile dipendente e una o più variabili esplicative. Questa fase permette di valutare l’influenza dei diversi fattori individuati sulla variabile di interesse, fornendo strumenti utili sia per l’interpretazione dei risultati sia per finalità previsionali.
+
+## Librerie utilizzate
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(psych)
+library(ggplot2)
+library(rnaturalearth)
+library(sf)
+library(corrplot)
+library(factoextra)
+library(knitr)
+library(kableExtra)
+library(cluster)
+library(MASS)
+library(dplyr)
+library(sandwich)
+library(lmtest)
+```
+
+- *tidyverse* è una collezione di pacchetti che fornisce strumenti potenti per la manipolazione, trasformazione e pulizia dei dati
+
+- *psych* viene utilizzato nel report per l'analisi descrittiva avanzata delle variabili e per il pairs.panels
+
+- *dplyr* fa parte del pacchetto tidyverse ed è dedicato alla manipolazione efficiente dei dati. Serve per filtrare, selezionare, aggregare o trasformare dataset con una sintassi semplice e intuitiva
+
+- *ggplot2* è il principale pacchetto per la visualizzazione grafica in R.
+
+- *rnaturalearth* è una libreria fondamentale per importare  e gestire shapefile a livello mondiale. Nel nostro report serve per ottenere la mappa del mondo e integrarla con i dati del nostro dataset.
+
+- *sf* ci aiuta a trasformare i dati geografici in formato "simple features", lo usiamo per combinare i dati dei paesi con le geometrie delle mappe. Queste ultime due librerie verranno utilizzate in sinergia con *ggplot2* nel paragrafo 2.4, 6.5 e 7.4.
+
+- *corrplot* è la libreria dedicata alla visualizzazione delle matrici di correlazione, ci fa rappresentare graficamente le correlazioni tra variabili numeriche per renderle graficamente impattanti e velocemente consultabili
+
+- *factoextra* è uno strumento avanzato per l'analisi multivariata. Viene utilizzato per PCA, clustering gerarchico e k-means. Ci offre funzioni specializzate come lo scree plot, il silhouette e la visualizzazione grafica dei cluster
+
+- *knitr* e *kableExtra* sono pacchetti che permettono di creare tabelle più formattate, professionali e personalizzate.
+
+- *cluster* è un pacchetto utilizzato per eseguire e visualizzare tecniche di clustering, ci fornisce strumenti come *clusplot()* che fornisce una rappresentazione dei cluster nello spazio delle componenti principali.
+
+- *MASS* è una libreria che fornisce funzioni di supporto come il glm() (utile per modelli lineari e generalizzati), nel report viene utilizzata per la creazione degli istogrammi delle variabili continue.
+
+- *sandwich* è una libreria che ci fornisce matrici di varianza-covarianza robuste, cioè corrette rispetto a violazioni delle ipotesi classiche del modello lineare
+
+- *lmtest* è una libreria che contiene diversi test statistici per modelli lineari quali il Breusch-Pagan o il Chow test, nel report viene anche utilizzata per il coeftest() ovvero stimare i coefficienti usando una matrice di vcov personalizzata
+
+\newpage
+# Analisi Esplorativa
+## Caricamento dati e struttura
+Prima di iniziare il report dobbiamo impostare la cartella di lavoro in cui R cercherà i file da leggere e dove, ove necessario, salverà i successivi output.
+
+```{r}
+setwd("C:\\Users\\lsale\\OneDrive\\Desktop\\REPORT")
+```
+
+Una volta stabilita la cartella di lavoro possiamo caricare i dati in memoria:
+
+```{r}
+data <- read.csv("World_Happiness_2024.csv")
+```
+
+Andiamo ora a vedere la struttura del dataset
+
+```{r}
+dim(data)
+```
+Abbiamo quindi 143 osservazioni, che rappresentano ciascuna di esse un paese diverso per 12 colonne che sono le variabili del nostro dataset.
+Andiamo a vedere i nomi delle colonne per capire quali peculiarità sono state prese in considerazione dai paesi
+
+```{r}
+names(data)
+```
+
+Un altro dato da tenere in considerazione è il tipo di dati contenuti all'interno delle colonne, andiamo a farne una verifica
+
+```{r}
+str(data)
+```
+
+Notiamo quindi che le variabili *Country.name* e *Regional.indicator* sono di tipo *chr*, quindi stringhe di caratteri mentre tutte le altre variabili all'interno del dataset sono numeriche.
+
+Per avere una struttura del dataset andiamo a stamparne le prime righe
+
+```{r}
+kable(head(data[,1:6]), 
+             caption = "Prime righe del dataset per le prime colonne",
+             align="c")
+```
+
+Un'altro dato da tenere in considerazione è la possibile presenza di dati mancanti all'interno delle colonne, andiamo a verificarne la presenza e, nel caso in cui fossero presenti, andiamo a risolvere per poter continuare il report.
+
+```{r}
+kable(colSums(is.na(data)))
+```
+Notiamo la presenza di 3 valori mancanti per tutte le variabili ad eccezione di *Country.name*, *Regional.indicator*, *Ladder.score*, *upperwhisker* e *lowerwhisker*.
+Vediamo a quali paesi corrispondono le osservazioni mancanti
+
+```{r}
+kable(unique(data$Country.name[!complete.cases(data)]))
+```
+
+I dati mancanti appartengono quindi al *Bahrain*, al *Tajikistan* e allo *Stato di Palestina*, andiamo a rimuoverle dal dataset
+
+```{r}
+data <- na.omit(data)
+```
+
+Andiamo a verificare nuovamente la presenza di dati mancanti per essere certi di averli rimossi
+
+```{r}
+kable(colSums(is.na(data)))
+```
+Possiamo adesso proseguire con l'analisi del dataset.
+
+## Descrizione delle variabili
+
+- **Country name:** Nome del paese.
+- **Regional indicator:** Regione a cui appartiene il paese.
+- **Ladder score:** Il punteggio di felicità per ciascun paese, basato sulle risposte alla *Cantril Ladder*.
+- **Upper whisker:** Limite superiore del punteggio di felicità.
+- **Lower whisker:** Limite inferiore del punteggio di felicità.
+- **Log GDP per capita:** Logaritmo naturale del PIL pro capite, aggiustato per PPP.
+- **Social support:** Media delle risposte (0/1) sulla presenza di supporto sociale.
+- **Healthy life expectancy:** Anni medi di vita in buona salute.
+- **Freedom to make life choices:** Livello medio di soddisfazione per la libertà di scelta.
+- **Generosity:** Residuo della regressione delle donazioni rispetto al PIL pro capite.
+- **Perceptions of corruption:** Media delle percezioni della corruzione.
+- **Dystopia + residual:** Benchmark minimo + residuo non spiegato.
+
+
+
+## Analisi descrittiva
+Per l'analisi descrittiva abbiamo bisogno delle sole variabili numeriche, andiamo a creare quindi un nuovo dataset dove andiamo ad escludere le prime due colonne ovvero *Country name* e *Regional Indicator*
+
+```{r message=FALSE, warning=FALSE}
+data_num <- data %>%
+  dplyr::select(where(is.numeric))
+```
+
+ Mostriamo le prime righe del nuovo dataset
+
+```{r}
+kable(head(data_num[,1:6]), 
+             caption = "Prime righe del dataset per le prime colonne",
+             align="c")
+```
+
+Ora su questo dataset andiamo a fare il describe ovvero un comando della libreria psych che ci restituisce tutte le metriche più interessanti quali media, mediana, deviazione standard, minimo, massimo, skewness e curtosi per ciascuna variabile numerica.
+
+```{r}
+describe(data_num)
+```
+
+Dall'analisi delle statistiche descrittive osserviamo che la  variabile *Ladder Score* ha una media pari a circa 5.53, valore leggermente inferiore a quello della mediana pari a 5.80  il che  ci indica una leggera asimmetria negativa ovvero una coda più lunga verso i valori più bassi.
+La stessa asimmetria la notiamo anche per le variabili  *Log.GDP.per.capita* e *Social.support*.
+Le variabili *Ladder.Score*, *upperwhisker* e *lowerwhisker* mostrano un range relativamente ampio (rispettivamente 6.02, 6.04 e 6.00) il che potrebbe suggerire la presenza di possibili outliers che vanno ad influenzare la distribuzione, tale ipotesi sarà verificata successivamente tramite analisi grafica, ad esempio con il boxplot o tramite il calcolo degli intervalli basati sull’IQR.
+Osservando i valori di deviazione standard notiamo differenze significative tra le variabili, infatti *Ladder.Score*, *Upperwhisker* e *lowerwhisker* presentano un valore di deviazione standard compreso tra 1.17  e 1.20 suggerendo quindi una variabilità più elevata rispetto alle altre presenti nel dataset ciò va quindi a confermare ciò che abbiamo supposto sul range ampio indicando una maggiore dispersione attorno al valore medio.
+Al contrario variabili come *Generosity*, *Perceptions.of.corruption*, *Freedom.to.make.life.choices* e *Healthy.life.expectancy* mostrano valori di deviazione standard più bassi il che, oltre ad indicarci una variabilità molto contenuta attorno alla media, ci dicono anche che queste variabili tendono ad avere dei valori simili tra i diversi paesi.
+Per la variabile *Perceptions.of.corruption* notiamo un valore di curtosi positivo elevato (*~1.83*) il che indica che  i valori sono più concentrati al centro della distribuzione e non sulle code, rendendola così una distribuzione più 'appuntita' rispetto ad una Normale.
+Notiamo dei valori di asimmetria positiva per le variabili *Freedom.to.make.life.choices* e *Perceptions.of.corruption*, come evidenziato dai valori di skewness che sono rispettivamente pari a _~0.65_ e _~1.49_ questo ci indica che per queste variabili la coda della distribuzione tende ad estendersi verso i valori più alti.
+
+La variabile *Regional.Indicator* rappresenta le aree geografiche di appartenenza dei paesi nel dataset pertanto possiamo considerarla a tutti gli effetti una variabile categoriale.
+Procediamo quindi con la fattorizzazione
+```{r}
+data$Regional.indicator <- as.factor(data$Regional.indicator)
+```
+
+Successivamente, analizziamo la distribuzione percentuale delle osservazioni per ciascuna regione:
+
+```{r}
+kable(round((table(data$Regional.indicator) / nrow(data)) * 100, 2), 
+      caption="Distribuzione percentuale dei paesi all'interno delle diverse regioni")
+```
+
+Notiamo quindi che la maggior parte dei paesi proviene dal *Sub-Saharan Africa* e dalla *Western Europe*, le due regioni maggiormente rappresentate all'interno del dataset, il che suggerisce una presenza poco uniforme dei paesi nelle diverse regioni.
+
+
+## Distribuzione Geografica
+Andiamo a vedere graficamente ciò che avevamo appena detto riguardo alla distribuzione dei paesi per le regioni
+```{r}
+par(mar=c(10,4,4,2))
+barplot(table(data$Regional.indicator),
+        main="Distribuzione dei paesi nelle diverse regioni",
+        ylab="Frequenze",las=2,
+        col=rainbow(10),
+        cex.names=0.58)
+```
+
+### Preparazione dati per visualizzazione grafica
+
+Per introdurre la componente geografica dell'analisi definiamo innanzitutto un oggetto che rappresenta la mappa delle regioni.
+Per importare la mappa usiamo le librerie *rnaturalearth* e *sf* che ci consentono di ottenere una variabile con al suo interno lo shapefile aggiornato dei dati cartografici del mondo.
+
+
+```{r}
+world <- ne_countries(scale = "medium", returnclass = "sf")
+```
+
+Per far si che i nomi delle variabili coincidano andiamo a creare una nuova variabile che contiene il nostro dataset dove però andiamo a cambiare *Country.name* in *name*
+
+```{r}
+data_map <- data %>% 
+  rename(name = Country.name)
+```
+
+A questo punto procediamo con l'operazione di join, ovvero andiamo ad unire la mappa caricata in precedenza con il dataset aggiornato.
+L'integrazione avviene mediante una chiave di corrispondenza ovvero il nome del paese che ci consente quindi di associare correttamente le informazioni statistiche alle rispettive geometrie spaziali.
+
+```{r}
+world_data <- world %>% 
+  left_join(data_map, by = "name")
+```
+
+
+### Distribuzione per regione (Barplot)
+
+Possiamo adesso visualizzare la mappa, colorando ogni regione con un colore a sé
+
+```{r}
+ggplot(world_data) +
+  geom_sf(aes(fill = Regional.indicator), color = "gray40") +
+  scale_fill_brewer(palette = "Paired", na.value = "lightgray") +
+  labs(
+    title = "Distribuzione Delle Regioni",
+    subtitle = "Visualizzazione grafica delle regioni nel Dataset",
+    caption = "Fonte: World Happiness Report 2024"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold", size = 18),
+    plot.subtitle = element_text(size = 12),
+    legend.position = "right",
+    panel.grid = element_blank()
+  )
+```
+
+### Mappa del Ladder Score
+
+```{r}
+ggplot(world_data) +
+  geom_sf(aes(fill = Ladder.score), color = "gray40") +
+  scale_fill_viridis_c(option = "plasma", direction = 1,
+                       name = "Ladder Score") +
+  labs(title = "Distribuzione globale del Ladder Score",
+      subtitle = "Indicatore di benessere nel World Happiness Report 2024",
+      caption = "Fonte: World Happiness Report 2024"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold", size = 18),
+    plot.subtitle = element_text(size = 12),
+    legend.position = "right",
+    panel.grid = element_blank()
+  )
+```
+
+
+### Mappa di Log.GDP.per.capita
+
+```{r}
+ggplot(world_data) +
+  geom_sf(aes(fill = Log.GDP.per.capita), color = "gray40", size = 0.2) +
+  scale_fill_viridis_c(
+    option = "plasma",
+    direction = 1,
+    name = "Log GDP\nper Capita"
+  ) +
+  labs(
+    title = "Distribuzione Globale del Log GDP per Capita",
+    subtitle = "Indicatori economici del World Happiness Report 2024",
+    caption = "Fonte: World Happiness Report 2024"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold", size = 18),
+    plot.subtitle = element_text(size = 12),
+    legend.position = "right",
+    panel.grid = element_blank()
+  )
+```
+
+### Mappa di Perception of Corruption
+
+```{r}
+ggplot(world_data) +
+  geom_sf(aes(fill = Perceptions.of.corruption), color = "gray40", size = 0.2) +
+
+  scale_fill_gradientn(
+    colours = c("#E76F51","#E9C46A","#2A9D8F"),
+    name = "Corruzione\nPercepita",
+    limits = c(min(world_data$Perceptions.of.corruption, na.rm=TRUE),
+               max(world_data$Perceptions.of.corruption, na.rm=TRUE))
+  ) +
+  labs(
+    title = "Distribuzione della corruzione percepita nel mondo",
+    subtitle = "Percezione della corruzione del World Happiness Report 2024",
+    caption = "Fonte: World Happiness Report 2024"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold", size = 18),
+    plot.subtitle = element_text(size = 12),
+    legend.position = "right",
+    panel.grid = element_blank()
+  )
+
+```
+
+
+\newpage
+# Analisi grafica univariata
+
+## Istogrammi delle variabili continue
+
+```{r}
+par(mfrow=c(2,5))
+par(cex=0.43)
+for (i in c(1:10)){
+  truehist(data_num[[i]], main= paste("Hist di ", colnames(data_num[i])))
+}
+```
+
+Gli istogrammi riportati evidenziano le principali caratteristiche distributive delle variabili utilizzate nel World Happiness Report.
+Molte variabili seguono una distribuzione moderatamente asimmetrica, spesso con una coda sinistra più lunga per gli indicatori positivi (Ladder score, supporto sociale, aspettativa di vita, libertà) e una coda destra più lunga per gli indicatori negativi (percezione della corruzione, Dystopia + residual).
+Ciò riflette la presenza di possibili outliers che andremo successivamente a verificare.
+Andando nel dettaglio:
+
+- *Ladder score*, *upperwhisker* e *lowerwhisker* mostrano una distribuzione concentrata tra 4 e 7 punti evidenziando come la maggior parte dei paesi si concentri in un livello di felicità medio-alto con pochi casi estremi nella parte più bassa
+
+- *Log.GDP.pro.capite* è fortemente asimmetrica il che indica che pochi paesi hanno valori molto alti, la maggior parte dei paesi si distribuisce quindi nella fascia medio-bassa
+
+- *Social support* e *Healthy life expectancy* hanno delle distribuzioni piuttosto compatte, la maggior parte dei paesi si distribuisce nella fascia medio-alta.
+
+- *Freedom to make life choices* ha una distribuzione più ampia e una variabilità piuttosto marcata ma indica comunque una certa eterogeneità della libertà percepita nei paesi
+
+- *Generosity* è per lo più concentrata su valori medio-bassi il che indica che la generosità elevata è presente solo in pochi paesi.
+
+- *Perception of Corruption* è concentrata su valori molto bassi con una coda destra lunga, significa quindi che sono pochi i paesi in cui è percepito un elevato grado di corruzione.
+
+- *Dystopia + Residual* presenta una distribuzione fortemente asimmetrica, dei valori alti sono tipici nei paesi meno felici e riflettono quindi un grande divario dalle condizioni ottimali.
+
+
+## Istogramma e densità del ladder score
+
+```{r message=FALSE, warning=FALSE}
+ggplot(data, aes(x = Ladder.score)) +
+  geom_histogram(
+    aes(y = after_stat(density)),
+    fill = "lightblue",
+    color = "white",
+    bins = 30
+  ) +
+  geom_density(
+    color = "#1f78b4",
+    size = 1
+  ) +
+  labs(
+    title = "Distribuzione e Densità del Ladder Score",
+    x = "Ladder Score",
+    y = "Densità"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10))
+  )
+
+```
+
+L’asse delle ascisse (x) rappresenta i valori del Ladder Score, mentre l’asse delle ordinate (y) indica la densità, ossia il grado di concentrazione dei paesi nei diversi intervalli di punteggio.
+L’istogramma mostra una distribuzione moderatamente asimmetrica a sinistra, con la maggior parte delle osservazioni concentrate su valori medio-alti di felicità. Ciò suggerisce che la maggioranza dei paesi presenta livelli di benessere percepito relativamente elevati, mentre solo una parte ridotta registra valori molto bassi.
+
+In particolare, le densità più alte si osservano per valori compresi tra 5 e 7, con un progressivo calo all’avvicinarsi dei punteggi più bassi.
+Le code della distribuzione, sebbene risultino estese, sono poco dense, indicando quindi la presenza di pochi paesi con livelli di felicità decisamente inferiori rispetto alla media globale, che potremmo definire possibili outlier.
+
+Nel complesso, la distribuzione del Ladder Score appare leggermente sbilanciata, con una prevalenza di paesi che presentano valori mediamente elevati e una minoranza che contribuisce ad abbassare la media globale.
+Questa caratteristica potrà essere rilevante nelle successive analisi di correlazione, poiché punteggi molto bassi potrebbero associarsi a condizioni socio-economiche o geopolitiche meno favorevoli.
+
+Andiamo quindi a confermare ciò che avevamo supposto: in questo caso la leggera asimmetria negativa ci indica che la maggior parte dei paesi presenta livelli di felicità medio-alti, mentre la percentuale di paesi con punteggi estremamente bassi è molto ridotta; infatti, la densità del campione diminuisce sensibilmente all’avvicinarsi dei valori più bassi del punteggio.
+
+Questo ci suggerisce anche la presenza di possibili outlier associati a condizioni di benessere particolarmente svantaggiose che potrebbero quindi influire sulle analisi successive, come la relazione con fattori economici, sociali o sanitari.
+
+## ECDF (Funzione di distribuzione cumulativa empirica)
+
+Andiamo a vedere il grafico ECDF (*Empirical Cumulative Distribution Function*) serve a rappresentare la distribuzione cumulativa empirica di una variabile continua, andiamo a farlo per le variabili *Ladder.score*, *Log.GDP.per.capita* e *Healthy.life.expectancy* andando quindi a combinare rispettivamente punteggio di felicità, il livello economico e l'aspettativa di vita in buona salute.
+
+Per farlo andiamo a creare un nuovo oggetto contenente i dati di queste colonne trasformandolo in formato long, quindi passiamo da una struttura larga (*wide*) in cui ogni colonna ha una sua variabile a un formato a struttura *long* in cui i valori di più variabili vengono messi tutti in un’unica colonna, accompagnati da una colonna che indica a quale variabile appartengono.
+Lo facciamo perché ggplot, nei grafici comparativi (ECDF, density, boxplot multipli), lavora in modo perfetto quando i dati sono in formato long.
+
+```{r}
+data_long <- data %>%
+  dplyr::select(Ladder.score, Log.GDP.per.capita, Healthy.life.expectancy) %>%
+  pivot_longer(cols = everything(),
+               names_to = "Variabile",
+               values_to = "Valore")
+```
+
+Stampando le prime righe riesco a mostrare anche le differenze con il formato *wide*
+
+```{r}
+kable(head(data_long))
+```
+
+Procediamo adesso con la visualizzazione grafica
+
+```{r}
+ggplot(data_long, aes(x = Valore, color = Variabile)) +
+  stat_ecdf(geom = "step", size = 1) +
+  theme_minimal() +
+  labs(
+    title = "Confronto delle Funzioni di Distribuzione Cumulata (ECDF)",
+    x = "Valore osservato",
+    y = "F(x)"
+  ) +
+  scale_color_brewer(palette = "Dark2") +
+  theme(legend.title = element_blank(),
+        plot.title = element_text(hjust = 0.5))
+```
+
+Dal confronto delle funzioni di distribuzione cumulata emergono differenze marcate tra le variabili che abbiamo preso in considerazione.
+La più rapida tra le tre a raggiungere valori prossimi a 1 è *Health.life.expectancy* che è rappresentata dalla linea verde il che ci indica una distribuzione estremamente concentrata su valori medio-alti con poca dispersione.
+La *Log.GDP.per.capita*, rappresentata dalla curva blu, mostra una crescita leggermente più graduale, ma comunque caratterizzata da una bassa variabilità interna e una concentrazione prevalente verso i valori più elevati.
+Al contrario delle prime due la variabile *Ladder.score*, rappresentata dalla curva arancione, cresce in modo molto più lento e progressivo e ci suggerisce quindi una distribuzione più ampia e una maggiore eterogeneità tra i paesi.
+Dal grafico notiamo specialmente che ha una coda più lunga per valori bassi di ladder score quindi una parte importante dei paesi si colloca su livelli di felicità inferiori rispetto alla maggioranza.
+
+## Boxplot
+
+```{r}
+par(mfrow=c(2,5))
+par(cex=0.42)
+for (i in c(1:10)){
+  boxplot(data_num[[i]], main= paste("Boxplot di ", colnames(data_num[i])))
+}
+```
+
+Il boxplot è un grafico particolarmente utile poichè permette di vedere velocemente la posizione centrale, la variabilità e la presenza di possibili outlier per ogni variabile nel dataset.
+Nel dettaglio:
+
+- *Ladder score*, *upperwhisker* e *lowerwhisker* presentano una mediana intorno a 5.5–6 e una dispersione piuttosto contenuta, delle code a sinistra leggermente più lunghe che rappresentano i paesi caratterizzati da livelli di felicità inferiori.
+
+- *Log.GDP.per.capita* mostra una variabilità ampia, la mediana è piuttosto alta ma sono presenti valori molto bassi che rappresentano i paesi con condizioni economiche peggiori. L'estremo inferiore è particolarmente pronunciato
+
+- *Social Support* ha una distribuzione  relativamente compatta nella parte medio-alta ma mostra comunque una coda sinistra evidente, segno della presenza di possibili outliers negativi quindi di paesi con un supporto sociale particolarmente basso.
+
+- *Health Life expectancy* mostra una mediana intorno a valori medio-bassi, con una distribuzione piuttosto simmetrica ma con la presenza di alcuni valori particolarmente distanti dalla media che indicano quindi condizioni di salute più compromesse.
+
+- *Freedom to make life choices* ha  un range interquartile piuttosto stretto il che indica una distribuzione piuttosto compatta ma bisogna comunque evidenziare la presenza  di numerosi valori inferiori al di sotto del limite del box.
+
+- *Generosity* mostra valori generalmente bassi con un'estensione verso l'alto limitata. Gli outliers superiori suggeriscono che solo pochi paesi hanno valori di generosità particolarmente elevati.
+
+- *Perception of corruption* ha una mediana relativamente bassa, ha diversi valori molto alti che suggeriscono la presenza di paesi dove il fattore di corruzione è particolarmente percepito dai cittadini
+
+- *Dystopia + residual* presenta una distribuzione più concentrata, ma con diversi outlier (sia superiori che inferiori), gli outliers superiori rappresentano paesi con condizioni ben lontane da quelle ottimali mentre quelli inferiori sono i paesi con condizioni di vita particolarmente superiori alla media.
+
+## Outlier(IQR)
+
+Oltre che vederne la possibile presenza graficamente possiamo andare a calcolarli, per farlo su tutte le variabili possiamo applicare una funzione che ci restituirà in output il numero di outlier per ciascuna variabile
+
+```{r}
+outliers <- sapply(data_num, function(x) {
+  Q1  <- quantile(x, 0.25)
+  Q3  <- quantile(x, 0.75)
+  IQR <- Q3 - Q1
+  lower <- Q1 - 1.5 * IQR
+  upper <- Q3 + 1.5 * IQR
+  sum(x < lower | x > upper)
+})
+kable(outliers)
+```
+L'analisi degli outlier basata sul criterio dell'IQR evidenzia differenze significative nella presenza di valori estremi che influenzano le distribuzioni delle variabili.
+Notiamo che abbiamo molti outlier per la variabile *Dystopia + Residual*, il che indica il divario da condizioni ideali; infatti, già dal boxplot, per questa variabile notavamo possibili outlier sia al di sopra che al di sotto della distribuzione.
+La variabile con il numero maggiore di outlier all'interno del dataset è *Perception of corruption*, ha 11 outlier il che suggerisce una fortissima variabilità nella percezione della corruzione, è la variabile più disomogenea del dataset ed evidenzia il fatto che abbiamo stati classificati in maniera estremamente critica mentre altri mostrano livelli molto bassi di percezione della corruzione.
+
+Questi dati possiamo anche vederli in percentuale per darci un'idea di quanto impattino sui dati
+```{r}
+outliers_perc <- round(
+  outliers / nrow(data_num) * 100,
+  2
+)
+kable(outliers_perc)
+```
+
+
+## Q–Q plot e verifica della normalità
+
+```{r}
+par(mfrow = c(2,3))
+par(cex=0.6)
+vars <- c("Ladder.score", "Log.GDP.per.capita", "Social.support",
+          "Healthy.life.expectancy", "Freedom.to.make.life.choices", "Generosity")
+
+for (v in vars){
+  qqnorm(data[[v]], main = paste("Q-Q Plot per", v))
+  qqline(data[[v]], col="#aa1945")
+}
+
+```
+
+Il Q-Q Plot è un grafico che ci permette di confrontare i quantili teorici della distribuzione normale con quelli osservati per ciascuna variabile.
+Quasi tutte le variabili ad eccezione di *Ladder.score* e *Social.support* sembrano seguire i quantili della normale  queste due invece presentano deviazioni marcate dalla linea rossa evidenziando così la presenza di asimmetrie, code pesanti o possibili outlier.
+Bisogna comunque sottolineare che il Q-Q plot fornisce una valutazione visiva e qualitativa; per verificare formalmente la normalità dei residui esistono dei test specifici, quale lo Jarque-Bera, ai quali faremo poi riferimento nelle sezioni successive.
+
+
+\newpage
+
+# Analisi Grafica Bivariata
+
+## Ladder Score per tutte le regioni (boxplot condizionato)
+
+Per approfondire ulteriormente la struttura dei dati è possibile rappresentare un boxplot condizionato da una variabile categoriale.
+In questo caso possiamo creare il boxplot della variabile Ladder.score e vedere come varia in base all'area geografica di appartenenza.
+
+```{r}
+par(mar=c(4,10.5,4,2))
+boxplot(Ladder.score ~ Regional.indicator,
+        data = data,
+        main = "Ladder Score per Regione",
+        horizontal = TRUE,
+        las = 1,
+        cex.axis = 0.6,
+        ylab="")
+
+```
+
+Il boxplot del ladder score suddiviso per regione evidenzia differenze molto marcate nel livello di felicità percepita tra le diverse aree geografiche nel mondo.
+Scendendo nel dettaglio notiamo che:
+
+- *Western Europe* presenta i livelli di felicità più elevati, ha una mediana molto alta e una variabilità particolarmente ridotta il che va a confermare la posizione dominante di questa regione all'interno delle classifiche del benessere.
+
+- *North America and ANZ* mostra valori molti alti e una variabilità ancor più ridotta rispetto a quella di _Western Europe_
+
+- *Latin America and Caribbean*, *Central and Eastern Europe* ed *East Asia * sono da considerare come regioni intermedie, infatti la mediana è più bassa rispetto all'europa occidentale ma è comunque maggiore rispetto alle altre regioni che possiamo considerare più fragili. La variabilità interna tra queste 3 è moderata il che indica una eterogeneità tra i paesi
+
+- *Middle East and North Africa*  è la regione con la dispersione maggiore tra i dati, ci indica quindi una grande disomogeneità tra i paesi in questa regione con paesi che spaziano da livelli di benessere particolarmente elevati ad alcuni molto bassi
+
+- *Southeast Asia* e *South Asia* mostrano valori generalmente medio-bassi, notiamo anche la presenza di outlier con livelli di benessere praticamente minimi, con i dati che abbiamo a disposizione possiamo supporre che quel valore particolarmente basso in questa fascia appartenga all'*Afghanistan* che è uno dei casi più estremi all'interno del dataset
+
+- *Sub-Saharan Africa* presenta i valori più bassi complessivi, notiamo un'ampia variabilità e una mediana ridotta. Questa rappresenta la regione più globalmente svantaggiata in termini di benessere percepito.
+
+
+## Ladder Score per le sole regioni europee (Western vs Central/Eastern)
+
+Possiamo anche focalizzarci sull'Europa e vedere come cambia il *Ladder score* a seconda della zona europea di appartenenza.
+Selezioniamo quindi solo due aree geografiche, *Western Europe* e *Central and Eastern Europe*.
+Creiamo quindi una nuova variabile contenente esclusivamente queste due categorie che utilizzeremo poi come fattore di raggruppamento.
+
+```{r}
+dati_europei <- data %>%
+  filter(Regional.indicator %in% c("Western Europe","Central and Eastern Europe"))
+```
+
+Per assicurarci che la selezione delle sole regioni europee sia stata effettuata correttamente andiamo a vedere i valori unici della variabile *Regional.indicator* dell'oggetto appena creato.
+
+```{r}
+unique(dati_europei$Regional.indicator)
+```
+
+Dopo aver confermato, tramite unique(), che i livelli siano solo quelli corrispondenti alle regioni europee passiamo alla rappresentazione grafica.
+
+
+```{r}
+ggplot(dati_europei, aes(x = Regional.indicator,
+                         y = Ladder.score,
+                         fill = Regional.indicator)) +
+  geom_boxplot() +
+  labs(title = "Confronto Ladder Score tra le Regioni Europee",
+       x = "Regione Europea",
+       y = "Ladder Score") +
+  theme_minimal() +
+  scale_fill_manual(values = c("#56B4E9", "#E69F00"))
+```
+
+
+Il confronto tra Europa occidentale e Europa centrale/orientale evidenzia un divario netto in termini di felicità percepita, infatti per quanto riguarda la prima ha valori decisamente più elevati con una mediana particolarmente prossima al 7 e una variabilità contenuta nella parte alta della distribuzione. Dalla seconda invece notiamo che la mediana è molto più bassa (equivale circa a _6.3_) e abbiamo una maggiore dispersione nella parte inferiore del boxplot, questo significa che ci sono paesi che sebbene appartengono a questa regione riportano condizioni di benessere percepito significativamente inferiori.
+
+## Violin plot del ladder score per regione
+
+Il violin plot è un grafico che mostra le distribuzioni complete del ladder score per ciascuna regione andando a evidenziare non solo la mediana e la variabilità (tramite il boxplot che contiene al suo interno) ma anche la forma della densità dei valori.
+I valoridi *Ladder.score* verranno ordinati in modo crescente per maggiore chiarezza grafica.
+```{r}
+data$Regional.indicator <- reorder(data$Regional.indicator,
+                                   data$Ladder.score,
+                                   FUN = median)
+
+ggplot(data, aes(x = Regional.indicator, y = Ladder.score, fill = Regional.indicator)) +
+  geom_violin(trim = FALSE, alpha = 0.4, color = "gray30") +
+  geom_boxplot(width = 0.12, fill = "white", outlier.size = 0.8) +
+  labs(
+    title = "Distribuzione del Ladder Score per Regione",
+    x = "Regione",
+    y = "Ladder Score"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(angle = 30, hjust = 1, size = 10),
+    plot.title = element_text(size = 16, face = "bold"),
+    axis.title = element_text(size = 12)
+  )
+
+
+```
+
+Entrando nel dettaglio del violin plot possiamo suddividere le regioni in tre gruppi: Regioni con valori più bassi, regioni con valori intermedi e regioni con valori più elevati.
+
+- *Regioni con valori più bassi* :
+
+-- *South Asia* e *Sub-Saharan Africa* presentano le distribuzioni più basse e schiacciate verso il fondo, evidenziano quindi un indice di felicità molto basso in queste regioni. South Asia, come notato anche prima, presenza un valore estremamente basso (*Afghanistan*) mentre la variabilità dell'altra è maggiore.
+
+-- *Middle East and North Africa* mostra una distribuzione  molto ampia e irregolare il che fa capire che la variabilità della felicità percepità in questa zona è particolarmente elevata.
+
+- *Regioni con valori intermedi* :
+
+-- *Commonwealth of Independent States*, *Southeast Asia*, *East Asia* e *Latin America and Caribbean* si collocano in una fascia intermedia, notiamo densità particolarmente compatte con mediane che si trovano comprese tra 5 e circa 6 indicando quindi condizioni di benessere percepito piuttosto variabili ma comunque moderate.
+
+-- *Central and Eastern Europe* quest'ultima ha una distribuzione mediamente più alta delle precedenti ma ancora distante però dai livelli delle regioni occidentali, notiamo comunque una notevole variabilità interna.
+
+- *Regioni con valori avanzati* :
+
+-- *Western Europe* e *North America and ANZ* presentano le distribuzioni più alte e compatte, notiamo che le mediane si trovano comprese tra il 6.5 e il 7.2 circa e che le densità sono particolarmente concentrate nella parte alta della scala.
+Notiamo inoltre variabilità particolarmente ridotte che sta ad indicare che quasi tutti i paesi di queste due regioni si trovano su livelli di benessere percepito piuttosto elevati.
+
+
+## Relazione tra PIL e Ladder Score (Hexbin Plot)
+
+```{r warning=FALSE}
+ggplot(data, aes(x = Log.GDP.per.capita, y = Ladder.score)) +
+  geom_hex(bins = 25) +
+  scale_fill_viridis_c(option = "C") +
+  theme_minimal() +
+  labs(
+    title = "Relazione tra PIL Pro Capite e Ladder Score (Hexbin Plot)",
+    x = "Log GDP per Capita",
+    y = "Ladder Score",
+    fill = "Densità"
+  )
+```
+
+L'hexbin plot  mostra in modo efficace la relazione tra il reddito pro capite e il Ladder Score.
+Notiamo in questi dati una correlazione positiva piuttosto evidente poichè al salire del reddito pro capite è presente un corrispettivo aumento anche nel Ladder score.
+Le zone con densità più elevata, evidenziata da colori come giallo e arancio, si trovano in paesi con ladder score compreso tra 6 e 7 circa il che dimostra che la maggior parte dei paesi a reddito medio-elevato presenta livelli di benessere soggettivo superiori.
+Notiamo anche nella parte sinistra del grafico casi limite con valori di reddito pro capite particolarmente bassi e anche con valori di ladder score compresi tra 2 e 4 segnalando quindi condizioni economiche e sociali particolarmente instabili.
+
+
+## Correlazione
+
+```{r}
+corr <- cor(data_num)
+```
+
+Dopo aver calcolato la matrice di correlazione potremmo stamparla cosi com'è oppure, per semplificarne la lettura, possiamo plottarla mediante la libreria CorrPlot
+
+```{r}
+corrplot(corr, type="upper", method="circle",
+         addCoef.col = "black",   
+         number.cex = 0.5,           
+         tl.cex = 0.8,               
+         tl.col = "black",           
+         col = colorRampPalette(c("darkred","white","darkblue"))(200),
+         diag=FALSE
+)
+```
+
+Dalla matrice di correlazione notiamo che abbiamo perfetta correlazione tra le variabili Ladder.score, lowerwhisker e upperwhisker il che ci indica che queste tre variabili esprimono la stessa relazione.
+La collinearità rappresenta un problema da tenere in considerazione per quando verrà stimato il modello di regressione poichè se tenessimo le variabili con collinearità nel modello i coefficienti saranno sbagliati come il valore dell'R2 che sarebbe molto alto perchè avremo fit perfetto sui dati.
+La collinearità invece non rappresenta un problema per la PCA il cui scopo è proprio quello di ridurre la dimensionalità ed evitare la multicollinearità.
+Notiamo che la variabile Ladder.score ha alta correlazione anche con le variabili Log.GDP.per.capita, social.support, Healthy.life.expectancy, Freedom.to.make.life.choiches che probabilmente saranno tutti gli indici di cui è composto l'indice di benessere percepito.
+La variabile relativa al reddito ha una correlazione positiva pari a circa 0.44 con la variabile di percezione di corruzione il che sta ad indicare che al salire del reddito dimuisce anche la percezione di corruzione nel paese.
+
+
+
+## Pairs Panels 
+
+```{r}
+pairs.panels(data_num)
+```
+
+Il pairs.panels è un comando che ci permette di visualizzare al di sotto della diagonale principale gli scatter plot tra le variabili, sulla diagonale principale le distribuzioni delle variabile mentre al di sopra i valori di correlazione.
+Osservando gli scatterplot notiamo la collinearità tra Ladder.score, upper.whisker e lowerwhisker dove tutti i punti si trovano sulla retta, ci indica che esprimono esattamente la stessa relazione.
+Al di sotto di queste variabili notiamo chiaramente relazioni lineari tra le variabili Log GDP per capita, Social support, Healthy life expectancy, Freedom to make life choices con i punti distribuiti lungo una direzione crescente ciò riflette che i livelli più alti di queste variabili sono associate ad indici di felicità maggiori.
+Variabili come Generosity e Perceptions.of.corruption invece mostrano una dispersione maggiore e anche delle relazioni più deboli con gli altri indicatori suggerendoci quuindi anche dai valori di correlazione con le altre variabili di essere associato meno rispetto agli altri aspetti di benessere.
+
+
+\newpage
+
+# Analisi delle componenti principali (PCA)
+
+La PCA ovvero principal component analysis è uno strumento di riduzione delle dimensioni che può essere utilizzato per ridurre un ampio insieme di variabili ad un piccolo insieme che contiene ancora la maggior parte delle informazioni dell'insieme ampio, questo obiettivo viene raggiunto trasformando le variabili originarie in un nuovo insieme di variabili chiamate *principal component*.
+Quest'ultime non sono correlate e sono ordinate in modo che le prime conservino la maggior parte dell'informazione e che vadano in ordine decrescente.
+L'obiettivo nel seguente report è quello di sintetizzare l’informazione delle variabili socio-economiche e di benessere in pochi fattori latenti, eliminare la multicollinearità e individuare eventuali pattern nascosti nella struttura dei dati. 
+
+```{r}
+pca_rs <- prcomp(data_num, center=TRUE, scale.=TRUE)
+summary(pca_rs)
+```
+
+In questo modo riusciamo a vedere la  standard deviation di ogni componente principale e, inoltre, la porzione di varianza del fenomeno spiegata da ciascuna componente principale, andiamo adesso a verificare che le proprietà siano rispettate
+
+
+## Proprietà e ortogonalità delle componenti
+Noi sappiamo che, dalle proprietà delle componenti principali, sono tra di loro ortogonali e, inoltre, la correlazione tra queste sarà pari a 0, andiamo a verificare questa ipotesi:
+
+```{r verifica proprietà, message=FALSE, warning=FALSE}
+round(cor(pca_rs$x),2)
+```
+
+L'ipotesi di incorrelazione tra le componenti principali è quindi verificata, andiamo a vedere graficamente quanta varianza è spiegata da ciascuna di esse
+
+## Varianza spiegata e Scree Plot
+
+Andiamo a verificare la varianza spiegata da ciascuna componente principale
+```{r}
+eigenvalues <- pca_rs$sdev^2
+var_percent <- round(eigenvalues / sum(eigenvalues) * 100,3)
+var_percent
+```
+
+Possiamo anche vederlo graficamente come
+
+```{r visualizzazione grafica, message=FALSE, warning=FALSE}
+fviz_eig(pca_rs, addlabels = TRUE, ylim = c(0, 60))
+```
+
+## Scelta del numero di componenti principali
+Ci sono diversi criteri per scegliere le componenti principali necessarie a spiegare il fenomeno, il primo è quello di
+raggiungere l'80% della varianza spiegata che, in questo caso, si raggiunge con le prime 3 componenti (raggiungiamo una varianza spiegata pari al 83.1%), si può vedere dove c'è il gomito ovvero la componente principale dopo la quale la varianza spiegata crolla e, anche in questo caso, prenderemmo fino alla terza componente e infine mediante la regola di Kaiser, andiamo ad applicarla:
+
+```{r criterio Kaiser, message=FALSE, warning=FALSE}
+eigenvalues[eigenvalues > 1]
+length(eigenvalues[eigenvalues >= 1])
+```
+
+Possiamo quindi confermare la scelta di mantenere le prime 3 componenti principali.
+
+Scelte queste 3 andiamo a vedere le correlazioni tra variabili originali e componenti
+```{r}
+round(pca_rs$rotation[,1:3],2)
+```
+
+Cominciando dalla prima componente principale notiamo che spiega particolarmente bene Ladder.score, upperwhisker, lowerwhisker, Log.GDP.per.capita, Social.support e Healthy.life.expectancy, rappresenta la componente principale più forte ed è praticamente un asse di benessere generale unisce ricchezza, salute, supporto sociale, libertà individuale e livello di felicità.
+
+Per quanto riguarda la seconda componente principale notiamo valore piuttosto alto per Healthy.life.expectancy, Generosity, Log.GPD.per.capita e, sopratutto, **Dystopia + residual:**, quest'ultima infatti pesa tantissimo sul totale  e notiamo che è molto forte, considerando che questa è una variabile che è alta nei paesi meno felici, i valori di GDP  e health.life.expectancy sono positivi, sostanzialmente questa seconda componente principale va a contrapporre paesi con un grado di felicità basso a paesi che a livello di condizioni sono oggettivamente migliori.
+
+Per quanto riguarda la terza componente invece notiamo valori alti di Generosity, Freedom.to.make.life.choices, Perceptions.of.corruption e **Dystopia + residual:**, sostanzialmente questa componente principale va a contrapporre paesi con le prime tre variabili alte (quindi paesi con bassa corruzione, alta generosità e alta libertà individuale) con paesi con bassa generosità, percezione alta di corruzione, minor libertà sociale.
+
+
+## PCA Biplot
+Procediamo adesso con la visualizzazione del biplot ovvero il grafico che mostra osservazioni e variabili (frecce = direzione di massima varianza) sul piano delle prime due componenti.
+Le frecce vicine tra loro rappresentano variabili correlate.
+\
+Le osservazioni proiettate nella stessa direzione delle frecce alte -> alte su quelle variabili.
+
+```{r biplot, message=FALSE, warning=FALSE}
+fviz_pca_biplot(pca_rs)
+```
+
+Il biplot rappresenta nello spazio le prime due componenti principali che cumulativamente corrispondono al 72% della varianza.
+Notiamo che le frecce delle variabili lowerwhisker, upperwhisker e Ladder.score sono molto vicine tra loro e va a confermare ciò che avevamo visto dalla correlazione, infatti avendo una correlazione pari a 1 esprimono la stessa relazione.
+Notiamo sulla destra due possibili outlier, i punti 142 e 143. Andiamo a vedere a quali paesi corrispondono
+
+```{r}
+data[rownames(data) %in% c("142", "143"), ]
+```
+
+Corrispondono quindi a Afghanistan e Libano, due paesi che sono entrambi caratterizzati da un basso livello di felicità, reddito, aspettativa di vita e stabilità socio-politica.
+Il loro posizionamento estremo rispetto al resto degli altri paesi rappresenta la capacità delle PCA di sintetizzare correttamente la distanza di tali paesi dalle condizioni ideali definite dalle variabili del *World Happiness Report*
+
+Le osservazioni invece più vicine alle variabili Ladder.Score, Freedom.to.make.choices, log.GDP.per.capita e life.expectancy sono quindi quelle che rappresentano i paesi con un benessere maggiore, notiamo tra queste variabili i punti 1,2,4,7 e 6 andiamo a vedere a cosa corrispondono
+
+```{r}
+data[rownames(data) %in% c("1", "2","4","7","6"), ]
+```
+
+Notiamo quindi che tutti i paesi con un benessere generale maggiore sono dell'Europa Occidentale e del Nord.
+
+
+## PCA – Contributo delle variabili
+Questo grafico mostra le variabili del dataset proiettate nel piano delle prime due componenti principali ottenute con l’analisi PCA. Serve per capire quali variabili contribuiscono maggiormente alla varianza totale e come sono correlate tra loro.
+
+```{r contributo delle var. , message=FALSE, warning=FALSE}
+fviz_pca_var(pca_rs,
+             axes = c(1, 2),
+             col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE) +
+  labs(title = "Contributo e correlazione delle variabili alle prime due componenti principali")
+
+```
+
+In questo grafico ogni freccia rappresenta una variabile, maggiore è la grandezza della freccia maggiore è l'importanza della variabile nel definire le componenti principali.
+La direzione della freccia indica invece il tipo della relazione, le variabili orientate nello stesso verso sono positivamente correlate mentre quelle opposte mostrano correlazione negativa (chiaramente ci si riferisce a correlazione tra variabili anche perchè le componenti principali hanno correlazione 0 tra loro).
+Il colore indica quanto la variabile è spiegata dalle prime due componenti, in questo caso più il colore tende al rosso più la variabile è spiegata bene, in caso la freccia tenda al blu significa che la variabile non è spiegata bene.
+
+## Distribuzione dei paesi nello spazio delle PC
+
+```{r}
+fviz_pca_ind(pca_rs,
+             axes = c(1, 2),
+             col.ind = "cos2",
+             gradient.cols = c("#ffe4e1", "#da5162", "#aa1945"),
+             repel = TRUE) +
+  labs(title = "Distribuzione ")
+```
+
+
+Ogni punto corrisponde ad un paese, il colore indica quanto ciascun paese è ben rappresentato dalle due componenti. Più i punti sono scuri più sono spiegati dalle PCA mentre più sono chiari più contribuiscono meno alla varianza in questo piano.
+Notiamo una dimostrazione piuttosto uniforme senza cluster nettamente separati il che indica che gli individui presentano caratteristiche eterogenee senza avere gruppi particolarmente distinte.
+
+
+\newpage
+
+# Cluster Analysis
+
+## Obiettivi dell'analisi di clustering
+
+ L’analisi dei cluster è una tecnica statistica multivariata di apprendimento non supervisionato che ha lo scopo
+ di raggruppare oggetti simili in gruppi omogenei chiamati cluster. Questa tecnica riduce la complessità dei
+ dati, aiutando a riassumere grandi insiemi di osservazioni in gruppi significativi e genera ipotesi sui dati.
+ Esistono due principali approcci:
+ 
+ - Analisi gerarchica:  costruisce una gerarchia di cluster (es. dendrogramma), utile per esplorare
+ relazioni tra gruppi quando il campione non è troppo grande.
+ - Analisi non gerarchica: tra questi troviamo il metodo k-means, in questo caso bisogna preventivamente specificare  il  numero di cluster e assegna gli oggetti di conseguenza
+ 
+## Preparazione dei dati per il clustering
+Cominciamo a normalizzare i dati numerici
+ 
+```{r}
+data_scal <- scale(data_num)
+psych::describe(data_scal)
+```
+ 
+ Andando a normalizzare le variabili notiamo che adesso ognuna di esse ha media 0 e varianza 1.
+ 
+## Scelta della distanza e del metodo di clustering
+
+Andiamo a calcolare adesso la matrice delle distanze, come metodo per calcolare le distanze andiamo a selezionare quello *euclideo* perchè particolarmente appropriata per variabili standardizzate.
+
+```{r}
+d <- dist(data_scal, method= "euclidean")
+```
+
+Utilizziamo ora _hclust_ che è il comando che ci permette di eseguire la cluster analysis gerarchica su R. Questo approccio raggruppa progressivamente  le osservazioni in cluster senza dover specificare prima il numero dei cluster.
+Come metodo di aggregazione adottiamo *ward.D2* in quanto minimizza l'incremento della somma dei quadrati all'interno del cluster ad ogni passo dell'aggregazione producendo così gruppi compatti e con bassa variabilità interna.
+
+```{r}
+hc <- hclust(d, method="ward.D2")
+```
+
+
+## Clustering Gerarchico Agglomerativo
+### Dendrogramma
+```{r}
+ plot(hc,
+ main = "Dendrogramma- Metodo WardD2",
+ xlab = "Osservazioni",
+ ylab = "Distanza",
+ labels= FALSE,
+ hang =-1,
+ col = "black")
+```
+
+Il grafico rappresenta i 140 paesi, per una maggiore chiarezza visiva ho escluso le label dei paesi.
+Quello che vediamo in figura è un dendrogramma, un grafico particolarmente utile per rappresentare il risultato della cluster analysis gerarchica.
+Rappresenta sostanzialmente un albero che mostra come le osservazioni si uniscono in cluster, a quale distanza si uniscono e la struttura gerarchica dei gruppi.
+In questo caso ogni osservazione parte come un cluster e ogni iterazione le osservazioni più simili si uniscono tra loro, anche i cluster possono unirsi fino a creare un singolo cluster sostanzialmente.
+La lunghezza del ramo rappresenta la distanza, più in alto avviene la fusione più diversi erano i cluster, nel nostro caso probabilmente l'ultima unione rappresenta i paesi con ladder.score maggiore (Western europe) con quelli più a rischio (es. *South-Asia* e *Sub-Saharian Africa*).
+Il passo successivo è quello di tagliare i cluster adesso decidendo quanti gruppi selezionare, visivamente possiamo aspettarci di ottenere 2 o 3 cluster, probabilmente la scelta migliore sarebbe proprio 2 e la notiamo dal notevole distacco tra i  cluster di sinistra e di destra, possiamo anche sceglierli calcolando, ad esempio, la WSS (Within-Cluster Sum of Squares) per diversi numeri di cluster usando il clustering gerarchico (hcut).
+
+### Scelta del numero ottimale di cluster
+
+```{r}
+grf_wss<-fviz_nbclust(data_scal,FUN=hcut,method="wss")
+grf_wss+
+ labs(
+ title="Metodo del gomito(WSS)",
+ x="Numero di cluster(k)",
+ y="Somma delle distanze intra-cluster (WSS)"
+ )+
+ theme_minimal()+
+ theme(
+ plot.title=element_text(hjust=0.5,face="bold")
+ )+
+ scale_color_manual(values="blue")+
+ scale_fill_manual(values="blue")
+```
+
+Il metodo del WSS mostra come la somma delle distanze intra-cluster diminuisce all'aumentare di k.
+Dal grafico notiamo un forte calo da k=1 a k=2 e un miglioramento ancora significativo nel passagio da k=2 a k=3. Dal k successivo notiamo che la curva inizia sempre più ad appiattirsi, ciò suggerisce che il gomito della curva si trovi tra k=2 e k=3, andiamo a vedere anche il metodo della silhouette cosa ci restituisce
+
+
+```{r}
+grf<-fviz_nbclust(data_scal,FUN=hcut,method="silhouette")
+grf+
+ labs(
+ title="Metodo della Silhouette",
+ x="Numero di cluster(k)",
+ y="Ampiezza silhouette"
+ )+
+ theme_minimal()+
+ theme(
+ plot.title=element_text(hjust=0.5,face="bold")
+ )+
+ scale_color_manual(values="blue")+
+ scale_fill_manual(values="blue")
+```
+
+Il metodo della silhouette valuta la qualità dei cluster misurandone la compattezza e quanto sono separati tra loro, valori più alti indicano una struttura di clustering più definita.
+Dal grafico notiamo che l'ampiezza media della silhouette raggiunge il massimo per k=2 scendendo significativamente per k=3. Scegliendo k=2 quindi otterremo gruppi compatti internamente, ben separati tra loro e con dei confini più marcati rispetto alla selezione di un k maggiore.
+Il metodo della silhouette va quindi a confermare l'ipotesi che avevamo posto dopo aver visualizzato il dendogramma e andiamo a fissare il numero di cluster _k_ pari a *2*
+
+### Interpretazione preliminare dei cluster
+
+```{r}
+cluster <- cutree(hc,k=2)
+```
+
+Andiamo a mettere in tabella i cluster
+
+```{r}
+table(cluster)
+```
+
+Quindi il primo cluster contiene 78 osservazioni mentre il secondo 62, per vederli in percentuale 
+
+```{r}
+round((table(cluster)/nrow(data_scal)) *100,2)
+```
+
+Il primo cluster ha quindi il 55.71% delle osservazioni mentre l'altro il 44.29%.
+Possiamo andare adesso a visualizzare i cluster in 2 dimensioni per vedere la distribuzione dei gruppi
+
+```{r}
+fviz_cluster(list(data=data_scal,cluster=cluster))
+```
+
+Questo cluster plot mostra la distribuzione dei paesi nello spazio definito dalle prime due componenti principali della PCA colorati in base ai cluster individuati con il metodo di Ward.
+Le regioni identificate sono nettamente separate lungo la prima componente principale che, come avevamo detto prima, rappresenta l'asse del benessere complessivo.
+I punti del cluster 1 rappresentano paesi con valori più alti di Dim1 e rappresenta quindi nazioni caratterizzate da livelli superiori di benessere percepito e condizioni socio-economiche meno fragili inoltre i punti in questo cluster sembrano molto più concentrati rispetto a quelli del cluster 2 il che indica una maggiore omogeneità tra i paesi in questo gruppo.
+Il cluster 2 rappresenta invece i paesi con valori bassi di benessere, ha una dispersione maggiore, notiamo inoltre punti estremi come il 142 e il 143 (che corrispondo rispettivamente a Libano e Afghanistan) che si collocano nelle zone più distanti del grafico.
+Andiamo adesso a vedere come sarebbe cambiato questo grafico se avessimo scelto k=3
+
+```{r}
+cluster3 <- cutree(hc,k=3)
+fviz_cluster(list(data=data_scal,cluster=cluster3))
+```
+
+L'analisi con k=3 mostra una suddivisione meno netta e più difficile da interpretare rispetto alla soluzione con k=2 infatti notiamo che se k=3 i cluster sono leggermente sovrapposti, il cluster 2 (con il colore verde) occupa una zona centrale ma si sovrappone in modo significativo sia con il cluster 1 che dal cluster 3 il che presuppone che non rappresenta un gruppo realmente diviso dal punto di vista delle componenti principali.
+Data questa evidenza grafica andiamo a confermare ciò detto in precedenza e andiamo a selezionare il numero di cluster ottimale _k=2_
+
+### Analisi sui centroidi 
+
+Andiamo adesso a calcolare i centroidi, il centroide rappresenta il punto medio di un cluster, come se fosse la media delle coordinate di tutte le osservazioni che appartengono al cluster, non rappresenta quindi un osservazione reale ma solo una media multivariata che rappresenta il cluster nel suo insieme.
+
+```{r}
+centroids <- aggregate(data_scal, by=list(cluster), mean)
+names(centroids)[1] <- "Cluster"
+
+vars1 <- c("Ladder.score", "upperwhisker", "lowerwhisker", 
+           "Log.GDP.per.capita", "Social.support", "Healthy.life.expectancy")
+
+vars2 <- c("Freedom.to.make.life.choices", "Generosity",
+           "Perceptions.of.corruption", "Dystopia...residual")
+
+
+tab1 <- centroids[, c("Cluster", vars1)]
+tab2 <- centroids[, c("Cluster", vars2)]
+```
+
+\newpage
+
+Per una questione di formattazione della tabella la divido in 2 parti
+```{r}
+kable(tab1,
+      format = "latex",
+      booktabs = TRUE,
+      digits = 2,
+      caption = "Centroidi del Cluster – Indicatori Principali") %>%
+  kable_styling(font_size = 8)
+
+```
+
+```{r}
+kable(tab2,
+      format = "latex",
+      booktabs = TRUE,
+      digits = 2,
+      caption = "Centroidi del Cluster – Indicatori Secondari") %>%
+  kable_styling(font_size = 8)
+
+```
+
+Iniziando dalla *Table 10* ovvero quella che comprende gli indicatori principali notiamo che riporta i centroidi dei cluster per gli indicatori principali del benessere espressi in valori standardizzati.
+Il cluster 1, caratterizzato da valori positivi piuttosto alti su tutte le variabili, rappresenta i paesi ad alto benessere complessivo ovvero quello che probabilmente era rappresentato nei grafici dal colore azzurro.
+Il cluster 2, che presenta valori negativi per tutte le stesse variabili, raccoglie invece i paesi con livelli più bassi di benessere e condizioni socio-economiche più fragili. Questo gruppo era rappresentato nei grafici precedenti dal colore rosso e avevamo già ipotizzato si trattasse di paesi a rischio.
+
+Analizzando ora la *Table 11* andiamo a confermare ciò che avevamo supposto, anche in questo caso per il cluster 1 tutti valori positivi che indicano maggiore libertà personale, minore corruzione e un livello più basso della componente distopica a differenza del cluster 2 che presenta livelli più alti di corruzione, minore libertà e valori peggiori in tutte le altre dimensioni sociali.
+
+## Mappa dei cluster con clustering gerarchico
+
+Può essere particolarmente interessante vedere sulla mappa i cluster andando a colorare in maniera diversa i paesi appartenenti ai due gruppi.
+Iniziamo preparando il dataset con i cluster
+
+```{r}
+data_map_cluster <- data %>%
+  mutate(Cluster = factor(cluster)) %>%
+  rename(name = Country.name)
+```
+
+Andiamo a fare, come fatto già prima, la join tra la mappa e i dati con cluster
+
+```{r}
+world_cluster <- world %>%
+  left_join(data_map_cluster, by = "name")
+```
+
+Andiamo ora a generare la mappa con ggplot
+
+```{r}
+par(cex=0.8)
+ggplot(world_cluster) +
+  geom_sf(aes(fill = Cluster), color = "gray40", size = 0.2) +
+  scale_fill_manual(
+    values = c(
+      "1" = "#2A9D8F",    
+      "2" = "#E76F51" 
+    ),
+    name = "Cluster"
+  ) +
+  labs(
+    title = "Distribuzione Geografica dei Cluster",
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold", size = 18),
+    plot.subtitle = element_text(size = 12),
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold"),
+    panel.grid = element_blank()
+  )
+```
+
+
+\newpage
+# Clustering non gerarchico (k-means)
+
+Andiamo adesso a garantire la riproducibilità del risultato fissando un seed per poi applicare l'algoritmo Kmeans in cui andremo a specificare il numero di cluster grazie al parametro centers.
+
+```{r}
+set.seed(123)
+kmeans_fit <- kmeans(data_scal,centers=2)
+```
+
+Andiamo a vedere i dati che ci vengono restituiti dal comando kmeans
+
+## Centroidi del k-means
+
+```{r}
+kmeans_fit$centers
+```
+
+I centroidi ottenuti con il k-means sono praticamente identici a quelli del clustering gerarchico andando quindi a confermare la presenza di due gruppi particolarmente distinti. 
+Il gruppo 1 è quello dei paesi ad alto benessere mentre il gruppo 2 è quello dei paesi con condizioni socio-economiche peggiori, sostanzialmente quello dei paesi più in difficoltà.
+Il fatto che i centroidi del k-means risultino molto simili a quelli ottenuti con il metodo gerarchico di Ward indica la stabilità della struttura dei dati e va a confermare la nostra scelta di prendere k=2.
+Andiamo a vedere quante osservazioni troviamo per cluster:
+
+## Grandezza cluster nel k-means
+
+```{r}
+kmeans_fit$size
+```
+
+Possiamo anche andarlo a confrontare con la grandezza dei cluster del clustering gerarchico
+
+```{r}
+confronto <- data.frame(
+  Clust.Gerarchico = table(cluster),
+  Kmeans = kmeans_fit$size
+)
+
+knitr::kable(confronto, caption = "Confronto tra le dimensioni dei cluster (k-means vs Ward)")
+```
+
+Si osserva quindi che i due algoritmi producono risultati molto simili, nel clustering gerarchico il primo cluster conteneva 78 paesi mentre nel kmeans 84, le differenze sono comunque minime e ipotizzo che le differenze siano dovute a punti che erano situati nel confine tra le due zone.
+Andiamo adesso a visualizzare i punti
+
+## Risultati del Kmeans
+
+```{r}
+fviz_cluster(kmeans_fit, data=data_scal)
+```
+
+Questo grafico rappresenta i punti nello spazio delle prime due componenti principali, notiamo un confine più netto tra i due cluster il che probabilmente va a spiegare la differenza tra le grandezze dei cluster del clustering gerarchico
+Andiamo adesso a rappresentarle in maniera bidimensionale
+
+```{r}
+clusplot(data_scal, kmeans_fit$cluster, color=TRUE, shade=TRUE, labels=2, 
+         main= "Rappresentazione cluster con k-means")
+```
+
+Il grafico rappresenta i risultati del k-means sulle prime due componenti principali che spiegano cumulativamente il 72.02% della varianza.
+Le ellissi ci mostrano la forma e l'estensione dei due cluster che sono stati trovati dall'algoritmo k-means.
+Il cluster blu si concentra nella parte destra del grafico, questo cluster è caratterizzato da reddito pro capite maggiore, supporto sociale elevato aspettativa di vita più alta, minore percezione della corruzione e maggior livello di benessere soggettivo. 
+Il cluster rosso rappresenta invece la situazione opposta rappresentando livelli complessivamente più bassi di benessere e condizioni di maggiore 
+
+## Mappa dei cluster con clustering gerarchico
+
+Andiamo a preparare i dati
+```{r}
+data_map_kmeans <- data %>%
+  mutate(Cluster_KM = factor(kmeans_fit$cluster)) %>%
+  rename(name = Country.name)
+```
+
+Facciamo ora la join con la mappa
+
+```{r}
+world_kmeans <- world %>%
+  left_join(data_map_kmeans, by = "name")
+```
+
+Ora li andiamo a plottare con ggplot2
+
+```{r}
+ggplot(world_kmeans) +
+  geom_sf(aes(fill = Cluster_KM), color = "gray40", size = 0.2) +
+  scale_fill_manual(
+    values = c(
+      "1" = "#2A9D8F",      
+      "2" = "#E76F51"       
+    ),
+    name = "Cluster (k-means)"
+  ) +
+  labs(
+    title = "Distribuzione Geografica dei Cluster (k-means)"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold", size = 18),
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold"),
+    panel.grid = element_blank()
+  )
+
+```
+\newpage
+
+## Conclusioni
+
+L'analisi di clustering ha evidenziato la presenza di una struttura ben definita all'interno dei dati del World Happiness Report.
+Entrambi i metodi utilizzati (k-means e il clustering gerarchico basato su ward) convergono verso la stessa soluzione ottimale composta da due cluster.
+Il primo cluster raggruppa tutti i paesi che sono caratterizzati da livelli di benessere percepito più elevati e, quindi, i paesi con redito pro capite elevato, basso livello di percezione di corruzione e libertà di prendere scelte, in questa fascia troviamo paesi come quelli della Western Europe e del North America and ANZ.
+
+Il secondo cluster rappresenta i paesi con condizioni più fragili rappresentati da valori inferiori di ladder score e, quindi, di tutte le variabili ad esso collegate.
+Questo gruppo rispetto all'altro risulta più eterogeneo e presenta anche outlier vistosi.
+
+Nel complesso il clustering conferma una netta divisione tra due insiemi di paesi, tale suddivisione sarà particolarmente utile per interpretare le relazioni con i fattori che determinano la felicità .
+
+
+\newpage
+
+# Modello di Regressione Lineare Semplice
+
+La fase finale di questo report statistico consiste nella costruzione di un modello di regressione lineare volto a esplorare e quantificare le relazioni tra le variabili considerate.
+La regressione lineare rappresenta uno degli strumenti fondamentali dell'analisi statistica poichè consente di vedere come una variabile di risposta reagisce alla presenza di una o più variabili esplicative.
+
+Il modello di regressione lineare semplice è definito come:
+
+\( Y_i = \beta_0 + \beta_1 X_i + \varepsilon_i \)
+
+dove:
+
+- \(Y_i\) = variabile dipendente  
+- \(X_i\) = variabile esplicativa  
+- \(\beta_0\) = intercetta  
+- \(\beta_1\) = coefficiente di regressione  
+- \(\varepsilon_i\) = termine d'errore 
+
+## Scelta delle variabili
+
+Per scegliere le variabili da inserire nel modello andiamo a vedere quelle più correlate con quella che sarà la nostra Y ovvero *Ladder.Score*
+
+```{r}
+ sort(abs(corr["Ladder.score",]),decreasing=TRUE)
+```
+
+Andando ad escludere le variabili *lowerwhisker* e *upperwhisker* possiamo scegliere una variabile tra le altre. La variabile con la  correlazione più alta è *social.support* tuttavia, considerando l'obiettivo dell'analisi e il focus socio-economico dello studio può essere preferibile selezionare la variabile *Log.GDP.per.capita* che pur presentando una correlazione inferiore rappresenta un indicatore più interpretabile e rilevante dal punto di vista teorico.
+Andiamo adesso ad estrarre le variabili d'interesse
+
+
+```{r}
+Y <- data$Ladder.score
+X <- data$Log.GDP.per.capita
+```
+
+## Stima del modello
+
+Stimiamo adesso il modello, abbiamo una sola variabile esplicativa quindi ci troviamo nel caso di un modello di regressione lineare semplice.
+
+```{r}
+fit1 <- lm(Y~X,data=data)
+summary(fit1)
+```
+
+Il summary ci restituisce i risultati del modello, notiamo che sia l'intercetta, ovvero *Ladder.score*, che la variabile *Log.GDP.per.capita* sono statisticamente significative, lo notiamo dai valori di p-value molto bassi sono infatti minori di 2e-16.
+L'intercetta stimata è pari a  2.5865, ciò rappresenta il valore della nostra intercetta poste pari a 0 tutte le altre variabili presenti nel modello. Per ogni incremento unitario di X (*Log.GDP.per.capita*), Y aumenta in media di circa 2.13.
+Per vedere la qualità del modello possiamo affidarci ai valori di R2 e R2adjusted, l'R2 è pari a *0.5906* il che indica un modello che spiega circa il 59% della variabilità totale di Y, essendo un modello monovariato è un ottimo risultato che va a confermare la forte associazione lineare tra *Ladder.score* e *Log.GDP.per.capita*.
+L'R2adjusted ha un valore molto simile a quello dell'R2, questi due sono indici diversi poichè il primo perchè permette di confrontare i modelli in quanto nella sua formula tiene conto anche del numero di variabili inserite nel modello.
+Infine notiamo il valore di F-statistic pari a 199.1 con un p-value molto basso possiamo dire che l'intero modello è altamente significativo.
+Possiamo quindi rifiutare l’ipotesi nulla H0 secondo la quale il modello non avrebbe potere esplicativo, ovvero che il coefficiente della variabile indipendente sia pari a zero. In altre parole, i risultati confermano che Beta1 !=0 e che la variabile X contribuisce in modo significativo a spiegare la variabilità del Ladder score.
+I residui appaiono distribuiti in modo approssimativamente asimmetrico attorno allo 0 suggerendoci quindi che l'assunzione di linearità è plausibile e che non ci sono anomalie evidenti.
+
+### Intervalli di confidenza del modello
+
+Effettuiamo ora alcune validazioni sul modello, partendo dagli intervalli di confidenza dei coefficienti.
+
+```{r}
+confint(fit1)
+```
+
+Per l'intercetta l'intervallo è compreso tra 2.15 e 3.01 circa il che significa che, con un livello di confidenza del 95%, il valore medio atteso del Ladder.score è compreso in quell'intervallo.
+Per il coefficiente associato alla variabile indipendente X, cioè *Log.GDP.per.capita*, l'intervallo di confidenza va da 1.83 a 2.43 il che indica che con un livello di confidenza del 95% il vero valore del coefficiente Beta1 sarà all'interno di quell'intervallo.
+
+## Grafici sul modello di regressione lineare semplice
+
+### Scatter plot tra Ladder.Score e Logged.GDP.per.capita
+
+Tracciamo ora uno scatter plot che mostra la relazione tra il Log GDP per capita (asse delle ascisse) e il Ladder score (asse delle ordinate). I punti blu rappresentano i valori osservati per ciascun Paese, mentre la retta rossa sovrapposta è la retta di regressione stimata dal modello lineare, che evidenzia come il livello medio di benessere tenda a crescere al crescere del reddito pro capite.
+
+```{r}
+plot(X, Y, main = "Ladder.score vs Log.GDP.per.capita",
+ xlab = "Log.GPD.per.capita", ylab = "Ladder.score",
+ pch = 16, col = "darkblue")
+ abline(fit1, col = "red", lwd = 2)
+```
+
+Il grafico a dispersione mostra in modo evidente una relazione positiva tra le due variabili. Ogni punto blu rappresenta un paese del dataset mentre la retta rossa sovrapposta corrisponde alla retta di regressione lineare stimata.
+La pendenza positiva della retta indica che, al crescere del reddito pro capite, aumenta mediamente anche il livello di benessere percepito. In altre parole, i Paesi più ricchi tendono ad avere punteggi di felicità più elevati.
+La dispersione dei punti attorno alla retta suggerisce una correlazione abbastanza forte e lineare tra le due variabili.
+Complessivamente il grafico conferma che il Logged GDP per capita rappresenta uno dei predittori più influenti del Ladder Score coerentemente con quanto osservato prima.
+
+
+### Residui vs Valori Stimati
+
+Produciamo ora un grafico diagnostico che mette in relazione i valori predetti dal modello di regressione e i residui, ossia la differenza tra i valori osservati del Ladder score e quelli stimati dal modello.
+Questo tipo di rappresentazione è fondamentale per verificare la validità delle ipotesi del modello lineare, in particolare quella secondo cui i residui devono risultare distribuiti casualmente attorno allo zero, senza evidenziare pattern sistematici o forme di eteroschedasticità. Una distribuzione irregolare o con strutture particolari indicherebbe invece la presenza di problemi nel modello, come relazioni non lineari o varianza non costante dei residui.
+
+```{r}
+Ycapp <- fitted(fit1)
+res <- residuals(fit1)
+plot(Ycapp, res,
+     main = "Residui vs Valori Stimati",
+     xlab = "Valori Predetti (Ycap)",
+     ylab = "Residui",
+     pch = 19, col = "navy")
+abline(h = 0, col = "purple", lty = 2)
+```
+
+I punti effettivamente non sembrano seguire alcun pattern o seguire una struttura "a ventaglio" che indicherebbe un peggioramento della varianza al crescere dell' Ycap quindi possiamo dire che sono distribuiti casualmente.
+Nel complesso il grafico supporta quindi la validità del modello di regressione stimato, i residui appaiono infatti distribuiti in modo compatibile con le assunzioni del modello lineare.
+
+### Valori osservati vs Predetti
+
+Per osservare la bontà del modello possiamo andare a confrontare i valori effettivamente osservati con quelli previsti del modello.
+
+```{r}
+plot(Y,Ycapp,
+ main = "Osservati vs Predetti",
+ xlab = "Ladder Score osservato",ylab="Ladder Score predetto",
+ col="darkgreen",pch=16)
+ abline(a=0,b=1,col="orange")
+```
+
+Un R2=1 implicherebbe che tutti i punti coincidono esattamente con la retta di regressione. Qui si osserva invece una buona concentrazione attorno alla bisettrice, segno che le previsioni del modello sono in media abbastanza vicine ai valori osservati. La dispersione presente è normale in un modello lineare semplice, dove una sola variabile esplicativa non può catturare l’intera variabilità del fenomeno, giustificando un R2 non troppo elevato.
+
+### Q-Q Plot
+
+Andiamo adesso a fare un Q-Q plot dei residui ovvero uno strumento diagnostico che utilizziamo per valutare se i residui di un modello di regressione seguono una distribuzione normale come da assunzioni.
+
+```{r}
+qqnorm(res, main ="Q-Q plot")
+qqline(res, col ="purple", lwd=2.5)
+```
+
+Notiamo dal grafico che la maggior parte dei punti si dispone in modo abbastanza aderente alla retta teorica (colorata in viola) indicando quindi che i residui seguono una distribuzione che si avvicina alla normalità. Ad ogni modo notiamo comunque specialmente nelle code dei punti che si distaccano dalla retta ma non sembra una violazione grave ed è comunque un comportamento comune nei dati reali.
+Il Q-Q plot ci suggerisce quindi che l'assunzione di normalità dei residui è ragionevolmente soddisfatta.
+
+## Test Statistici
+
+
+
+### Test di Jarque-Bera
+
+Possiamo anche valutare la normalità dei residui mediante il test di Jarque-Bera, è un test basato sui momenti della distribuzione che verifica la normalità confrontando simultaneamente due caratteristiche: l'asimmetria e la curtosi.
+L'ipotesi nulla del test afferma che la distribuzione dei residui è normale ed è caratterizzata da asimmetria nulla e curtosi pari a 3.
+Se avessimo un p-value elevato non abbiamo evidenze significative per rifiutare l'ipotesi di normalità mentre un p-value basso suggerisce che i residui non hanno una forma compatibile con una distribuzione Normale
+
+```{r}
+tseries::jarque.bera.test(res)
+```
+
+Osservando il valore del p-value, possiamo concludere che la distribuzione dei residui non è normale quindi sebbene visivamente i residui non si discostano in modo drammatico dalla retta il test di Jarque–Bera rifiuta nettamente la normalità.
+Quindi l’ipotesi di normalità non è supportata a livello formale.
+
+### Test di Breusch-Pagan
+
+Il test di Breusch-Pagan è un test che ci permette di verificare l'assunzione di omoschedasticità ovvero la varianza costante dei residui.
+L'ipotesi nulla del test sostiene che i residui presentano varianza costante, un valore di p maggiore di 0.05 suggerisce che non ci sono quindi prove di eteroschedasticità e, quindi, l'ipotesi di omoschedasticità diventa plausibile. Viceversa, un valore di p-value particolarmente inferiore alla soglia indicherebbe la presenza di varianza non costante.
+
+```{r}
+lmtest::bptest(fit1)
+```
+
+Poiché il p-value è inferiore a 0.05, rifiutiamo l’ipotesi nulla di omoschedasticità.
+Questo significa che i residui non presentano varianza costante e che è presente eteroschedasticità nel modello sebbene anche in questo caso a livello grafico non si osservavano evidenti pattern.
+
+## Soluzione all'eteroschedasticità
+
+### Stimare gli standard error robusti
+
+La presenza di eteroschedasticità non altera la bontà delle stime  dei coefficienti ma rende non affidabile il test t e gli intervalli di confidenza.
+Per risolvere il problema abbiamo due possibilità, la prima è quella degli standard error robusti mentre l'altra sono i minimi quadrati generalizzati.
+Iniziamo dalla stima degli standard error robusti
+```{r}
+coeftest(fit1, vcov.= sandwich::vcovHC(fit1, "HC1"))
+```
+
+L'output corretto ci mostra che i coefficienti rimangono stimati comunque in modo simile, gli standard error sono leggermente più alti ma i valori dei test t e i relativi p-value sono rimasti uguali andando quindi a confermare ciò che avevamo detto prima sebbene adesso sappiamo che la varianza dei residui è non costante.
+
+### Minimi quadrati generalizzati
+
+L'altra possibile modalità di risoluzione è quella dei minimi quadrati generalizzati, in questo caso il modello viene stimato specificando dei pesi ottenuti come l'inverso della varianza stimata dei residui.
+Potremmo decidere di utilizzare questo metodo poichè in questo caso lo stimatore sarà anche *efficiente* a differenza degli standard error robusti.
+
+```{r}
+hatsq <- residuals(fit1)^2
+fit.rs <- lm(log(hatsq)~X, data=data)
+```
+
+Una volta stimato il modello con il logaritmo dei residui al quadrato andiamo a prenderne gli standard error
+
+```{r}
+sigma2_hat <- exp(fitted(fit.rs))
+```
+
+E andiamo poi a costruire i pesi
+
+```{r}
+w <- 1/sigma2_hat
+```
+
+Adesso possiamo andare a stimare il modello con i minimi quadrati generalizzati
+
+```{r}
+fit.mq <- lm(Y~X, weights = w, data=data)
+summary(fit.mq)
+```
+
+Notiamo che i valori dei coefficienti  sono molto simili a quelli ottenuti con OLS quindi, come previsto, anche in questo caso l'eteroschedasticità non compromette sui coefficienti ma solo sugli errori standard.
+
+\newpage
+
+# Modello di Regressione Lineare Multiplo
+
+Il modello di regressione multipla è espresso come:
+
+\( Y_i = \beta_0 + \beta_1 X_{1i} + \beta_2 X_{2i} + \cdots + \beta_k X_{ki} + \varepsilon_i \)
+
+dove:
+
+- \(X_{1i}, X_{2i}, \ldots, X_{ki}\) = variabili esplicative  
+- \(\beta_1, \beta_2, \ldots, \beta_k\) = coefficienti associati  
+- \(k\) = numero di predittori  
+- \(\varepsilon_i\) = termine d'errore  
+
+Costruiamo adesso un modello di regressione lineare multiplo che ha lo scopo di stimare i valori della variabile dipendente *Ladder.score* utilizzando come predittori due variabili indipendenti:  *Log.GDP.per.capita* e *Freedom.to.make.life.choices*
+
+```{r}
+X2 <- data$Freedom.to.make.life.choices
+```
+
+## Stima del modello
+
+Stimiamo adesso il modello
+
+```{r}
+fit2<- lm(Y~X+X2, data=data)
+summary(fit2)
+```
+
+Tutti i coefficienti del modello sono statisticamente significativi; possiamo quindi dire che, alla luce dei valori di t e dei relativi p-value, rifiutiamo l’ipotesi nulla H0 secondo cui i coefficienti sarebbero nulli.
+L'intercetta, poste pari a 0 tutte le altre variabili inserite all'interno del modello, è pari a 1.4372, per ogni incremento unitario della nostra variabile X (*Log.GDP.per.capita*) la variabile Y  avrà un incremento di 1.68 circa mentre  per quanto riguarda X2 (*Freedom.to.make.life.choices*) per ogni incremento di quest'ultima la nostra Y aumenterà di 2.859.
+L'R2 ha un valore pari a 0.7187 il che indica che le variabili spiegano il 71.87% della variabilità totale della variabile Y il che ci fa comunque capire che riescono a leggerla particolarmente bene.
+Anche in questo caso guardando i valori di F-statistic e di p-value andiamo a rifiutare l'ipotesi H0 ovvero l'ipotesi che i coefficienti siano tutti pari a 0 e rimanga solo l'intercetta all'interno del modello.
+
+### Confronto R2adj
+
+Andiamo a confrontare adesso l'R2adj che abbiamo ora con quello del modello di prima
+
+```{r}
+cbind(Fit2=summary(fit2)$adj.r.squared,
+      Fit1= summary(fit1)$adj.r.squared)
+```
+
+Notiamo quindi un valore molto più alto per il nuovo modello rispetto a quello di prima con una sola variabile.
+
+### VIF (Variance Inflaction Factor)
+
+Il VIF è un indicatore che misura il grado di collinearità presente tra le variabili indipendenti in un modello di regressione.
+Un VIF pari a 1 ci indica che non c'è collinearità, dobbiamo andare a porre attenzione nel caso in cui il VIF abbia un valore superiore a 5  abbiamo un potenziale problema di collinearità mentre se l'indice è superiore a 10 abbiamo collinearità severa.
+
+
+```{r}
+car::vif(fit2)
+```
+
+In questo caso troviamo dei valori bassi che indicano una correlazione moderata che è accettabile.
+
+### Intervalli di Confidenza 
+
+Gli intervalli di confidenza al 95% forniscono un range di valori plausibili per i coefficienti del modello, ci aspettiamo che il vero valore del parametro cada con probabilità del 95% all'interno di questo range
+
+```{r}
+confint(fit2)
+```
+
+Tutti i valori sono quindi sicuramente positivi, nessuno dei 3 valori comprende nel range il valore 0 il che ci restituisce che questi valori sono tutti statisticamente significativi.
+X ha un effetto più preciso e stabile, lo notiamo dal range inferiore rispetto ad X2 ma ad ogni modo possiamo dire che il modello è ben specificato e le stime sono affidabili.
+
+## Grafici sul modello di regressione lineare multiplo 
+
+### Relazione tra valori osservati e predetti
+
+Mostriamo la relazione tra i valori osservati e i valori predetti dal modello
+di regressione multipla
+ 
+```{r}
+Ycapp_multiplo<-fitted(fit2)
+ plot(Y,Ycapp_multiplo,
+ main = "Ladder.score osservato vs predetto",
+ xlab = "Ladder.score osservato",ylab="Ladder.score predetto",
+ col="#98dcff",pch=16)
+ abline(a=0,b=1,col="#362c5d")
+```
+ 
+ Il grafico ci conferma che il modello fornisce delle stime predittive accurate del Ladder.score con una buona aderenza ai valori osservati e senza segnali di distacco così evidenti.
+Notiamo quindi che l'R2 è più alto rispetto al modello semplice poichè i punti risultano più vicini alla retta bisettrice.
+ 
+### Residui vs Valori Stimati
+ 
+Mostriamo ora la distribuzione dei residui rispetto ai valori del modello di regressione multipla
+```{r}
+res_fit2 <- residuals(fit2)
+
+plot(Ycapp_multiplo,res_fit2)
+abline(h=0, col="red")
+```
+ 
+Il grafico ci mostra i residui del modello multiplo in funzione dei valori predetti del modello.
+I residui sembrano distribuiti in modo simmetrico attorno alla linea rossa (ovvero il valore 0), non notiamo segni evidenti di bias nelle previsione ad eccezione di qualche punto estremo.
+L'andamento dei punti non suggerisce la presenza di pattern o forme sistematiche il che è ottimo.
+Dalla dispersione dei residui non si presenta un eteroschedasticità drammatica,  potrebbe anche essere presente ma comunque in forma moderata, andremo successivamente a verificarlo con il *Breusch-Pagan Test*
+
+### Q-Q plot
+ 
+Andiamo adesso a visualizzare il Q-Q plot
+ 
+```{r}
+qqnorm(res_fit2)
+qqline(res_fit2, col ="purple")
+```
+ 
+Notiamo che anche in questo caso la maggior parte dei punti, specialmente quelli corrispondenti ai quantili centrali, è molto vicina alla linea viola ciò signfiica che i residui nella loro parte principale seguono la distribuzione normale.
+Notiamo deviazioni evidenti sia nella coda sinistra che nella coda destra che ci suggeriscono che la distribuzione dei residui ha code un pò più pesanti rispetto a quelli della normale.
+Il Q-Q plot suggerisce che i residui sono approssimativamente normali nella parte centrale della distribuzione; verifichiamo comunque formalmente questa ipotesi tramite il test di Jarque-Bera
+
+ 
+## Test Statistici
+
+### Test di Jarque-Bera
+
+Andiamo a vedere se notiamo differenze rispetto al modello di regressione lineare semplice
+
+```{r}
+tseries::jarque.bera.test(res_fit2)
+```
+
+Anche in questo caso la distribuzione dei residui non è normale anche se visivamente non si discostano in modo drammatico dalla retta.
+
+### Test di Breusch-Pagan
+
+```{r}
+lmtest::bptest(fit2)
+```
+
+Poiché il p-value è inferiore a 0.05, rifiutiamo l’ipotesi nulla di omoschedasticità.
+Anche in questo caso a  livello grafico non si osservano pattern evidenti, ma il test di Breusch–Pagan individua eteroschedasticità significativa, quindi l’ipotesi di varianza costante è violata.
+
+## Soluzione all'eteroschedasticità
+
+### Stimare gli standard error robusti
+
+Come prima la presenza di eteroschedasticità non altera la bontà delle stime  dei coefficienti ma rende non affidabile il test t e gli intervalli di confidenza.
+Iniziamo dalla stima degli standard error robusti
+```{r}
+coeftest(fit2, vcov.= sandwich::vcovHC(fit2, "HC1"))
+```
+
+Anche in questo caso notiamo che i coefficiente sono sostanzialmente gli stessi rispetto a prima, notiamo differenza sugli standard error che sono più alti in questo caso. Per quanto riguarda il test t invece tutte le variabili sono statisticamente significative quindi l'eteroschedasticità non è andata ad incidere  su questo
+
+### Minimi quadrati generalizzati
+
+Andiamo adesso a fare i minimi quadrati generalizzati, particolarmente importanti perchè ci restituiscono uno stimatore *efficiente*
+
+```{r}
+hat2sq <- residuals(fit2)^2
+fit2.rs <- lm(log(hat2sq)~X + X2, data=data)
+```
+
+Una volta stimato il modello con il logaritmo dei residui al quadrato andiamo a prenderne gli standard error
+
+```{r}
+sigma2_hat <- exp(fitted(fit2.rs))
+```
+
+E andiamo poi a costruire i pesi
+
+```{r}
+w2 <- 1/sigma2_hat
+```
+
+Adesso possiamo andare a stimare il modello con i minimi quadrati generalizzati
+
+```{r}
+fit2.mq <- lm(Y~X + X2, weights = w2, data=data)
+summary(fit2.mq)
+```
+
+Anche in questo caso i coefficienti sono molto simili a quelli ottenuti con OLS quindi possiamo affermare che anche nel modello di regressione multiplo l'eteroschedasticità non ha inciso nè sulle stime che sui test t e F.
+
+\newpage
+
+# Regressione multipla con variabile dummy
+
+In questa sezione andremo ad estendere il modello di regressione multipla includendo una variabile dummy, o variabile binaria, che identifica i paesi appartenenti all'area *Western Europe*.
+L'obiettivo è di verificare se l'essere parte di questa regione produca un effetto aggiuntivo sul *Ladder Score*, oltre a quanto già spiegato dalle altre variabili inserite nel modello.
+\
+La dummy è definita come:
+
+- **1** se il paese appartiene all'area *Western Europe*
+- **0** per tutti gli altri paesi
+
+Il modello stimato assume quindi la forma:
+\[
+\text{LadderScore}_i 
+= \beta_0 
++ \beta_1\,\text{Social.support}_i 
++ \beta_2\,\text{Healthy.life.expectancy}_i
++ \delta\, D^{WE}_i 
++ \varepsilon_i
+\]
+
+dove il coefficiente \(\delta\) misura la differenza media nel punteggio di felicità tra Western Europe e il resto del mondo.
+
+Iniziamo con la creazione della dummy:
+
+```{r}
+data$west_europe <- ifelse(data$Regional.indicator=="Western Europe",1,0)
+```
+
+Verifichiamo quanti paesi appartengono a questa area geografica:
+
+```{r}
+table(data$west_europe)
+```
+
+## Selezione delle variabili
+Andiamo a selezionare le nuove variabili selezionando per quest'analisi variabili sociali escludendo quindi momentaneamente quelle economiche.
+
+```{r}
+X3 <- data$Social.support
+X4 <- data$Healthy.life.expectancy
+D1 <- data$west_europe
+```
+
+### Visualizzazione grafica delle zone riguardanti la dummy
+
+Creiamo un nuovo oggetto contenente il nome del paese e la dummy che indica se fa parte della regione selezionata o meno
+
+```{r}
+data_westeurope <- data %>%
+  mutate(name= Country.name) %>%
+  dplyr::select(name, west_europe)
+```
+
+Andiamo a fare la join con la mappa
+
+```{r}
+world_data <- world %>% 
+  left_join(data_westeurope, by = "name")
+```
+
+Procediamo con la visualizzazione grafica della zona d'interesse della dummy
+
+```{r}
+ggplot(world_data) +
+  geom_sf(aes(fill = factor(west_europe)), color = "gray40") +
+  scale_fill_manual(values = c("0" = "red3", "1" = "seagreen3"),
+                    labels = c("0" = "Resto del dataset",
+                               "1" = "Western Europe"),
+                    name = "") +
+  labs(title = "Distribuzione dei Paesi Considerati: Western Europe vs Resto") +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold")
+  )
+```
+
+## Stima del Modello
+Stimiamo ora il modello di regressione multipla includendo la dummy:
+
+```{r}
+fit3 <- lm(Y~X2+X3+X4+D1)
+summary(fit3)
+```
+
+Guardando i risultati del modello notiamo che, poste pari a 0 tutte le altre variabili, l'intercetta assumerà in media un valore pari a 1.3387, per ogni incremento unitario della variabile X2 (*Freedom.to.make.life.choices*) avremo un incremento in media di 2.16 unità del *Ladder Score*, per ogni incremento unitario di X3 (*Social Support*)  avremo un incremento in media di 1.52 del valore atteso del *Ladder Score* e, infine, per ogni incremento unitario della variabile X4 (*Healthy Life Expectancy*) avremo un'incremento in media di circa 2.06 del *Ladder Score*.
+Per quanto riguarda la dummy notiamo che nel passaggio da Di = 0 a Di = 1, ovvero da quando il paese non fa parte di *Western Europe* a quando il paese fa parte di *Western Europe*, abbiamo un incremento del Ladder Score di 0.35 circa.
+Notiamo che tutte le variabili inserite all'interno del modello sono statisticamente significative, lo è anche la variabile D1 fissato alpha = 0.1, possiamo quindi dire che per ciascuna di queste variabili andremo a rifiutare l'ipotesi H0 ovvero che il coefficiente di queste variabili sia pari a 0.
+Notiamo dei valori di R2  e R2adjusted piuttosto alti possiamo sostenere quindi che le variabili riescono a leggere piuttosto bene la variabile di risposta avendo quindi una lettura dell'80.17% della variabilità della Y.
+Guardando i valori di F-statistic associato al p-value possiamo dire che andiamo a rifiutare l'ipotesi H0 che B1=....=Bn=0 ovvero che tutti i coefficienti delle variabili, ad eccezione dell'intercetta, siano pari a 0.
+
+
+### VIF (Variance Inflaction Factor)
+
+Per verificare la presenza di collinearità all'interno del modello utilizziamo il VIF, dovremmo attenzionarci se trovassimo valori superiori al 5 o al 10
+
+```{r}
+car::vif(fit3)
+```
+
+Notiamo in questo caso che non abbiamo alcun problema di collinearità poichè questi valori, sebbene suggeriscano la presenza di correlazione tra le variabili, non raggiungono valori alti.
+
+### Intervalli di confidenza del modello
+
+```{r}
+confint(fit3)
+```
+
+Notiamo che nessuna di queste variabili comprende lo 0 all'interno del suo range il che va a confermare ciò che avevamo detto riguardo la significatività delle variabili.
+Possiamo dire che quando tutte le variabili sono pari a 0 l'intercetta è chiaramente positiva e si colloca tra 0.93 e 1.75.
+Per la variabile X2 (*Freedom to make life choices*) possiamo dire che ha senza dubbio un effetto forte e significativo in quanto l'intervallo è positivo e molto distante dallo 0, ciò significa anche che al salire della libertà percepita salirà molto anche il punteggio di felicità.
+La stessa cosa possiamo dirla anche per le variabili X3 (*Social Support*) e X4 (*Healthy Life Expectancy*) che hanno entrambe un effetto significativo, robusto ed evidente.
+Per quanto riguarda invece la variabile dummy D1 (*Western Europe*) possiamo osservare che, sebbene l'intervallo sia sempre positivo, inizia con un valore molto vicino allo 0 il che significa che è sì significativa al 95% ma ha un effetto moderato.
+Infatti dai suoi valori possiamo dire che i paesi dell'Europa Occidentale hanno, in media, un Ladder Score superiore tra 0.07 e 0.64 punti rispetto agli altri paesi a parità di condizioni.
+
+
+### Grafico dei coefficienti con intervalli di confidenza
+
+```{r}
+coef_df <- broom::tidy(fit3, conf.int = TRUE) %>% 
+  filter(term != "(Intercept)")
+
+ggplot(coef_df, aes(x = term, y = estimate)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.15) +
+  coord_flip() +
+  labs(x = "", y = "Stima coefficiente",
+       title = "Coefficienti stimati con IC 95%") +
+  theme_minimal()
+```
+
+
+
+## Grafici sul modello di regressione lineare multiplo con dummy
+
+### Residui vs Valori stimati
+
+
+```{r}
+plot(fit3, 1)
+```
+
+Notiamo dal grafico che i residui non mostrano una dispersione uniforme lungo l'asse dei valori misurati il che potrebbe evidenziare la presenza di eteroschedasticità.
+La linea rossa non è perfettamente orizzontale e la leggera curvatura che prende potrebbe evidenziare la non linearità dei residui, la forma è quasi lineare ma non perfettamente piatta.
+Notiamo la presenza di outlier come i punti 131, 116 e 125 che, sebbene non siano estremi, vanno ad influenzare il modello.
+
+### Q-Q Plot
+
+```{r}
+qqnorm(residuals(fit3))
+qqline(residuals(fit3))
+```
+
+Notiamo che nella parte centrale i residui sembrano distribuirsi normalmente ma nelle code i punti si distaccano notevolmente dalla retta indicandoci quindi che molto probabilmente i residui del nostro modello non si distribuiscono come una normale.
+
+
+### Scale-Location
+
+Il grafico Scale–Location (o Spread–Location plot) visualizza la radice quadrata dei residui standardizzati in funzione dei valori stimati dal modello.
+È uno strumento utile per valutare l’ipotesi di omoschedasticità.
+
+```{r}
+plot(fit3,3)
+```
+
+Anche in questo caso andiamo a confermare la varianza non costante dei residui in quanto la curva di smoothing ha una tendenza decrescente. Se il modello fosse omoschedastico dovremmo avere una banda orizzontale costante. I punti non sono  distribuiti uniformemente il che è coerente con ciò detto prima.
+
+### Residui Standardizzati vs Leverage 
+Questo grafico ci permette di individuare le osservazioni influenti ovvero dei punti che a causa della combinazione tra leverage e residui possono avere un impatto significativo sulla stima del modello.
+
+
+```{r}
+plot(fit3, which = 5)
+```
+
+Osservazioni come 113,130,139 presentano leverage più elevato rispetto agli altri, non superano alcuna soglia critica il che indica che sebbene siano da monitorare non sono problematiche. Nessun punto supera la linea di Cook e notiamo che i residui standardizzati si trovano in un range accettabile, tra -3 e +2.
+
+
+
+## Test Statistici
+
+Per completezza riportiamo anche i principali test diagnostici già utilizzati nelle sezioni precedenti, applicandoli al modello con variabile dummy. 
+
+### Test di Jarque-Bera
+Questo test valuta se i residui seguono una distribuzione normale, confrontando skewness e kurtosis con quelli teorici.
+
+```{r}
+tseries::jarque.bera.test(residuals(fit3))
+```
+
+Il p-value è 0.01484 ed è inferiore di 0.05 andiamo quindi a rifiutare l'ipotesi nulla di normalità dei residui.
+
+### Test di Breusch-Pagan
+
+Questo test invece verifica se la varianza degli errori è costante rispetto ai valori previsti dal modello o ai regressori.
+
+```{r}
+lmtest::bptest(fit3)
+```
+
+Andiamo quindi a rifiutare l'ipotesi di omoschedasticità come avevamo già supposto guardando visivamente il pattern dei grafici diagnostici.
+
+
+## Soluzione per l'eteroschedasticità
+
+Poiché il test di Breusch–Pagan indica eteroschedasticità, stimiamo il modello con errori standard robusti di White.
+
+```{r}
+coeftest(fit3, vcov = vcovHC(fit3, type = "HC1"))
+```
+
+
+I coefficienti rimangono statisticamente significativi, confermando la robustezza del modello e confermandoci quindi che l'eteroschedasticità non incide sulla validità inferenziale del modello: le relazioni stimate tra le variabili esplicative e il Ladder Score sono robuste anche in caso di varianza non costante degli errori.
+
+
+
+\newpage
+
+# Conclusioni
+
+L'analisi condotta sul World Happiness Report - 2024 ha permesso di esplorare in modo piuttosto approfondito quelle che sono le dinamiche che caratterizzano la felicità nei diversi paesi del mondo. Nell'analisi sono stati utilizzati approcci descrittivi, grafici, multivariati e modellistici per capire al meglio le dinamiche dei paesi oltre che un approccio analitico che ha particolarmente evidenziato come gli indicatori economici e sociali inclusi nel dataset contribuiscano con pesi diversi alla variabilità del Ladder Score.
+\
+\
+Nella fase esplorativa iniziale è emerso che alcune variabili - quali *Log.GDP.per.capita*, *Social.support*, l'*Health Life expectancy* e *Freedom.to.make.life.choices* - presentano forti relazioni lineari con il livello di felicità.
+D'altro canto abbiamo visto anche indicatori come *Generosity* e *Perceptions.of.corruption* che mostrano associazioni più deboli e una maggiore dispersione confermando quindi una minore capacità esplicativa rispetto agli altri fattori fondamentali per la composizione del benessere.
+\
+\
+Le analisi multivariate, come la PCA, hanno evidenziato come buona parte della variabilità del dataset può essere sintetizzata in poche componenti principali le quali riflettono in larga misura (basta pensare alla variabilità letta delle componenti principali pari al 83.1%) gli assi di benessere socio-economico.
+Le tecniche di clustering (sia gerarchico sia k-means) hanno ulteriormente confermato questa struttura raggruppando i paesi in cluster coerenti che distinguono nettamente paesi ad alto reddito e ad alto benessere da quelli caratterizzati da situazioni socio-economiche più fragili.
+\
+\
+I modelli di regressione hanno fornito una validazione quantitativa più rigorosa delle  relazioni osservate. Abbiamo iniziato dal modello semplice dove abbiamo potuto già osservare come il reddito spiegasse già una buona porzione del *Ladder.score* indicandoci l'importanza di questa variabile per il benessere percepito. Abbiamo successivamente notato dalla regressione multipla che aggiungere un altra variabile socio-economica contribuisce a spiegare meglio il benessere prcepito.
+La significatività dei coefficienti e il valore in aumento dell'R2 ci ha dimostrato la solidità del modello esteso pur mettendo in evidenza alcune deviazioni dalla normalità dei residui.
+\
+\
+Nel complesso, l'analisi ci suggerisce che la felicità non dipende esclusivamente dal livello economico ma è la combinazione di più fattori quali le reti di supporto, l'aspettativa di vita in buona salute, la libertà personale e specialmente la fiducia nelle istituzioni quindi, sebbene alcune variabili presentino un impatto marginale, il quadro complessivo conferma una struttura chiara e interpretabile del benessere globale.
